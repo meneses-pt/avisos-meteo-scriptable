@@ -1,5 +1,4 @@
-// Avisos Meteo – Widget iOS (Scriptable) | UI moderna
-// Endpoint: https://avisos-meteo.andremeneses.workers.dev/?area=PTO
+// Avisos Meteo – Widget iOS (Scriptable) | UI moderna + agrupamento por tipo
 
 function runWidget() {
   var AREA = "PTO";
@@ -7,27 +6,26 @@ function runWidget() {
 
   var w = new ListWidget();
   w.setPadding(14, 14, 14, 14);
-  w.backgroundColor = new Color("#0B1220"); // navy/charcoal
+  w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=PTO";
 
   // Header
   var header = w.addStack();
   header.centerAlignContent();
 
-  var titleStack = header.addStack();
-  titleStack.layoutVertically();
+  var left = header.addStack();
+  left.layoutVertically();
 
-  var title = titleStack.addText("Avisos IPMA");
+  var title = left.addText("Avisos IPMA");
   title.font = Font.boldSystemFont(16);
   title.textColor = new Color("#FFFFFF");
 
-  var subtitle = titleStack.addText("Porto · Próximos avisos");
+  var subtitle = left.addText("Porto · Próximos avisos");
   subtitle.font = Font.systemFont(11);
   subtitle.textColor = new Color("#A6B0C3");
 
   header.addSpacer();
 
-  // “badge” de estado (preenchido após fetch)
   var statusPill = header.addStack();
   statusPill.setPadding(4, 8, 4, 8);
   statusPill.cornerRadius = 10;
@@ -44,7 +42,6 @@ function runWidget() {
     .then(function (data) {
       var warnings = (data && data.warnings) ? data.warnings : [];
 
-      // Determinar “nível máximo” para o estado no topo
       var maxLevel = getMaxLevel(warnings);
       applyStatusPill(statusPill, statusText, maxLevel, warnings.length);
 
@@ -54,11 +51,25 @@ function runWidget() {
         return;
       }
 
-      // Lista (até 3)
-      var count = Math.min(warnings.length, 3);
-      for (var i = 0; i < count; i++) {
-        if (i > 0) w.addSpacer(10);
-        renderWarningCard(w, warnings[i]);
+      // Agrupar por tipo
+      var groups = groupByType(warnings);
+
+      // Ordenar tipos por “gravidade máxima”, depois por nome
+      groups.sort(function (a, b) {
+        var pa = priority(a.maxLevel);
+        var pb = priority(b.maxLevel);
+        if (pb !== pa) return pb - pa;
+        return a.type.localeCompare(b.type);
+      });
+
+      // Limites por tamanho do widget
+      var fam = (config && config.widgetFamily) ? config.widgetFamily : "medium";
+      var maxTypes = fam === "large" ? 3 : 2;       // quantos tipos mostramos
+      var maxItemsPerType = fam === "large" ? 5 : 3; // quantos timeframes por tipo
+
+      for (var gi = 0; gi < Math.min(groups.length, maxTypes); gi++) {
+        if (gi > 0) w.addSpacer(10);
+        renderTypeCard(w, groups[gi], maxItemsPerType, fam);
       }
 
       w.addSpacer(10);
@@ -82,7 +93,6 @@ function runWidget() {
       finish(w);
     })
     .catch(function (err) {
-      // pill em “erro”
       statusPill.backgroundColor = new Color("#3B1D1D");
       statusText.textColor = new Color("#FFB4B4");
       statusText.text = "Erro";
@@ -127,25 +137,25 @@ function renderEmptyState(w) {
   t2.textColor = new Color("#A6B0C3");
 }
 
-function renderWarningCard(w, warn) {
+function renderTypeCard(w, group, maxItemsPerType, fam) {
   var card = w.addStack();
   card.layoutVertically();
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // Linha 1: tipo + chip nível
+  // Header do tipo
   var top = card.addStack();
   top.centerAlignContent();
 
-  var typeIcon = top.addText(iconForType(warn.type));
-  typeIcon.font = Font.systemFont(14);
+  var icon = top.addText(iconForType(group.type));
+  icon.font = Font.systemFont(14);
 
   top.addSpacer(6);
 
-  var type = top.addText(warn.type || "Aviso");
-  type.font = Font.boldSystemFont(13);
-  type.textColor = new Color("#FFFFFF");
+  var name = top.addText(group.type);
+  name.font = Font.boldSystemFont(13);
+  name.textColor = new Color("#FFFFFF");
 
   top.addSpacer();
 
@@ -153,36 +163,98 @@ function renderWarningCard(w, warn) {
   chip.setPadding(3, 8, 3, 8);
   chip.cornerRadius = 10;
 
-  var lvl = (warn.level || "").toLowerCase();
-  var chipStyle = colorsForLevel(lvl);
+  var chipStyle = colorsForLevel(group.maxLevel);
   chip.backgroundColor = chipStyle.bg;
 
-  var chipText = chip.addText(levelLabel(lvl));
+  var chipText = chip.addText(levelLabel(group.maxLevel));
   chipText.font = Font.boldSystemFont(11);
   chipText.textColor = chipStyle.fg;
 
   card.addSpacer(8);
 
-  // Linha 2: janela temporal
-  var time = card.addText(fmtPeriod(warn.start, warn.end));
-  time.font = Font.systemFont(11);
-  time.textColor = new Color("#A6B0C3");
+  // Lista de timeframes (compacta)
+  var items = group.items.slice(0, maxItemsPerType);
+  for (var i = 0; i < items.length; i++) {
+    if (i > 0) card.addSpacer(6);
+    renderTimeRow(card, items[i], fam);
+  }
 
-  // Linha 3: descrição (curta)
-  if (warn.text) {
-    card.addSpacer(6);
-    var desc = card.addText(warn.text);
-    desc.font = Font.systemFont(11);
-    desc.textColor = new Color("#D5DBE7");
-    desc.lineLimit = 3;
+  // Se houver mais do que mostramos, indicar “+N”
+  if (group.items.length > items.length) {
+    card.addSpacer(8);
+    var more = card.addText("+" + (group.items.length - items.length) + " intervalos");
+    more.font = Font.systemFont(10);
+    more.textColor = new Color("#7E8AA6");
   }
 }
 
-function applyStatusPill(pill, textNode, maxLevel, count) {
-  if (!count) {
+function renderTimeRow(parent, warn, fam) {
+  var row = parent.addStack();
+  row.centerAlignContent();
+
+  // left: datas
+  var when = row.addText(shortPeriod(warn.start, warn.end));
+  when.font = Font.systemFont(11);
+  when.textColor = new Color("#A6B0C3");
+
+  row.addSpacer();
+
+  // right: nível
+  var lvl = (warn.level || "").toLowerCase();
+  var pill = row.addStack();
+  pill.setPadding(2, 7, 2, 7);
+  pill.cornerRadius = 10;
+
+  var style = colorsForLevel(lvl);
+  pill.backgroundColor = style.bg;
+
+  var txt = pill.addText(levelLabel(lvl));
+  txt.font = Font.boldSystemFont(10);
+  txt.textColor = style.fg;
+
+  // opcional: texto (só em large, para não rebentar)
+  if (fam === "large" && warn.text) {
+    parent.addSpacer(4);
+    var d = parent.addText(warn.text);
+    d.font = Font.systemFont(10);
+    d.textColor = new Color("#D5DBE7");
+    d.lineLimit = 2;
+  }
+}
+
+function groupByType(warnings) {
+  var map = {}; // type -> {type, items, maxLevel}
+  for (var i = 0; i < warnings.length; i++) {
+    var w = warnings[i];
+    var type = w.type || "Aviso";
+    if (!map[type]) {
+      map[type] = { type: type, items: [], maxLevel: "green" };
+    }
+    map[type].items.push(w);
+
+    var lvl = (w.level || "").toLowerCase();
+    if (priority(lvl) > priority(map[type].maxLevel)) {
+      map[type].maxLevel = lvl;
+    }
+  }
+
+  // ordenar items dentro de cada tipo por start
+  var out = [];
+  for (var k in map) {
+    if (!map.hasOwnProperty(k)) continue;
+    map[k].items.sort(function (a, b) {
+      return String(a.start || "").localeCompare(String(b.start || ""));
+    });
+    out.push(map[k]);
+  }
+  return out;
+}
+
+function applyStatusPill(pill, textNode, maxLevel, totalCount) {
+  if (!totalCount) {
     pill.backgroundColor = new Color("#15311F");
     textNode.textColor = new Color("#9AF0B5");
-    textNode.text = "OK";
+    textNode.text = "Sem avisos";
     return;
   }
 
@@ -190,12 +262,11 @@ function applyStatusPill(pill, textNode, maxLevel, count) {
   pill.backgroundColor = style.bg;
   textNode.textColor = style.fg;
 
-  var label = levelLabel(maxLevel);
-  textNode.text = label + " · " + count;
+  // mais explícito do que “Laranja · 4”
+  textNode.text = totalCount + " avisos · máx " + levelLabel(maxLevel);
 }
 
 function getMaxLevel(warnings) {
-  // prioridade: red > orange > yellow > green > unknown
   var max = "green";
   for (var i = 0; i < warnings.length; i++) {
     var lvl = (warnings[i].level || "").toLowerCase();
@@ -213,17 +284,9 @@ function priority(level) {
 }
 
 function colorsForLevel(level) {
-  // Cores modernas (não “berrantes”)
-  if (level === "red") {
-    return { bg: new Color("#3B1D1D"), fg: new Color("#FFB4B4") };
-  }
-  if (level === "orange") {
-    return { bg: new Color("#3A2B10"), fg: new Color("#FFD7A1") };
-  }
-  if (level === "yellow") {
-    return { bg: new Color("#3A3610"), fg: new Color("#FFF0A6") };
-  }
-  // green / unknown
+  if (level === "red") return { bg: new Color("#3B1D1D"), fg: new Color("#FFB4B4") };
+  if (level === "orange") return { bg: new Color("#3A2B10"), fg: new Color("#FFD7A1") };
+  if (level === "yellow") return { bg: new Color("#3A3610"), fg: new Color("#FFF0A6") };
   return { bg: new Color("#15311F"), fg: new Color("#9AF0B5") };
 }
 
@@ -247,19 +310,17 @@ function iconForType(type) {
   return "⚠️";
 }
 
-function fmtPeriod(startIso, endIso) {
-  var s = fmtDate(startIso);
-  var e = fmtDate(endIso);
-  return s + " → " + e;
+function shortPeriod(startIso, endIso) {
+  // compacto: "ter 16 12:37 → qua 17 03:00"
+  return shortDate(startIso) + " → " + shortDate(endIso);
 }
 
-function fmtDate(iso) {
+function shortDate(iso) {
   try {
     var d = new Date(iso);
     return d.toLocaleString("pt-PT", {
       weekday: "short",
       day: "2-digit",
-      month: "short",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -281,5 +342,4 @@ function finish(w) {
   Script.complete();
 }
 
-// run
 runWidget();

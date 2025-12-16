@@ -1,4 +1,5 @@
-// Avisos Meteo – Widget iOS (Scriptable) | UI moderna + agrupamento por tipo + merge consecutivo
+// Avisos Meteo – Widget iOS (Scriptable)
+// UI moderna + agrupamento por tipo + agrupamento por (nível + descrição) com múltiplos intervalos
 // Endpoint: https://avisos-meteo.andremeneses.workers.dev/?area=PTO
 
 function runWidget() {
@@ -6,8 +7,6 @@ function runWidget() {
   var ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
 
   var fam = (typeof config !== "undefined" && config.widgetFamily) ? config.widgetFamily : "medium";
-
-  // Afinar UI por tamanho (garantir que no "médio" o título não corta)
   var ui = uiForFamily(fam);
 
   var w = new ListWidget();
@@ -15,33 +14,35 @@ function runWidget() {
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=PTO";
 
-  // Header
-  var header = w.addStack();
-  header.centerAlignContent();
+  // ===== Header (desenhada para NÃO cortar no medium) =====
+  // Linha 1: título (esquerda) + pill (direita) com texto curto no medium
+  var header1 = w.addStack();
+  header1.centerAlignContent();
 
-  var left = header.addStack();
-  left.layoutVertically();
-
-  var title = left.addText("Avisos IPMA");
+  var title = header1.addText("Avisos IPMA");
   title.font = Font.boldSystemFont(ui.titleFont);
   title.textColor = new Color("#FFFFFF");
   title.lineLimit = 1;
-  if (title.minimumScaleFactor !== undefined) title.minimumScaleFactor = 0.7;
+  if (title.minimumScaleFactor !== undefined) title.minimumScaleFactor = 0.65;
 
-  var subtitle = left.addText(ui.subtitleText);
-  subtitle.font = Font.systemFont(ui.subtitleFont);
-  subtitle.textColor = new Color("#A6B0C3");
-  subtitle.lineLimit = 1;
-  if (subtitle.minimumScaleFactor !== undefined) subtitle.minimumScaleFactor = 0.7;
+  header1.addSpacer();
 
-  header.addSpacer();
-
-  var statusPill = header.addStack();
+  var statusPill = header1.addStack();
   statusPill.setPadding(4, 8, 4, 8);
   statusPill.cornerRadius = 10;
 
   var statusText = statusPill.addText("…");
   statusText.font = Font.boldSystemFont(ui.pillFont);
+
+  // Linha 2: subtitle (se houver espaço)
+  if (ui.showSubtitle) {
+    w.addSpacer(2);
+    var subtitle = w.addText(ui.subtitleText);
+    subtitle.font = Font.systemFont(ui.subtitleFont);
+    subtitle.textColor = new Color("#A6B0C3");
+    subtitle.lineLimit = 1;
+    if (subtitle.minimumScaleFactor !== undefined) subtitle.minimumScaleFactor = 0.7;
+  }
 
   w.addSpacer(ui.afterHeaderSpace);
 
@@ -53,23 +54,21 @@ function runWidget() {
       var warnings = (data && data.warnings) ? data.warnings : [];
       var originalCount = warnings.length;
 
-      // Estado no topo (máx nível dos avisos originais)
       var maxLevel = getMaxLevelFromWarnings(warnings);
-      applyStatusPill(statusPill, statusText, maxLevel, originalCount);
+      applyStatusPill(statusPill, statusText, maxLevel, originalCount, ui);
 
       if (!warnings.length) {
         renderEmptyState(w, ui);
-        // Empurrar footer para baixo
-        w.addSpacer();
-        renderFooter(w, ui);
+        w.addSpacer(); // empurra footer para baixo
+        renderFooter(w);
         finish(w);
         return;
       }
 
-      // Agrupar por tipo e fazer merge consecutivo (same level + same text + intervals consecutivos)
-      var groups = groupByTypeAndMerge(warnings);
+      // Agrupar por tipo, e dentro do tipo agrupar por (level + description)
+      var groups = groupByTypeThenByLevelText(warnings);
 
-      // Ordenar tipos por gravidade máxima (do tipo), depois por nome
+      // Ordenar tipos por gravidade máxima
       groups.sort(function (a, b) {
         var pa = priority(a.maxLevel);
         var pb = priority(b.maxLevel);
@@ -77,29 +76,26 @@ function runWidget() {
         return a.type.localeCompare(b.type);
       });
 
-      // Render por tamanho
+      // Quantos tipos/blocos mostramos por tamanho
       var maxTypes = ui.maxTypes;
       var maxBlocksPerType = ui.maxBlocksPerType;
-
       var shownTypes = Math.min(groups.length, maxTypes);
+
       for (var gi = 0; gi < shownTypes; gi++) {
         if (gi > 0) w.addSpacer(ui.betweenCardsSpace);
         renderTypeCard(w, groups[gi], ui, maxBlocksPerType);
       }
 
-      // Resumo do que não coube (tipos escondidos)
+      // Resumo do que ficou fora (tipos escondidos)
       if (groups.length > shownTypes) {
         w.addSpacer(ui.betweenCardsSpace);
-        renderHiddenTypesSummary(w, groups, shownTypes, ui);
+        renderHiddenTypesSummary(w, groups, shownTypes);
       }
 
-      // Empurrar footer para o fundo
-      w.addSpacer();
-      renderFooter(w, ui);
+      w.addSpacer(); // footer em baixo
+      renderFooter(w);
 
-      // refresh
       w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
-
       finish(w);
     })
     .catch(function (err) {
@@ -107,9 +103,10 @@ function runWidget() {
       statusText.textColor = new Color("#FFB4B4");
       statusText.text = "Erro";
 
-      var t = w.addText("Não foi possível obter avisos.");
+      var t = w.addText("Erro ao obter avisos.");
       t.font = Font.systemFont(ui.bodyFont);
       t.textColor = new Color("#FFFFFF");
+
       w.addSpacer(6);
 
       var e = w.addText(String(err));
@@ -118,22 +115,24 @@ function runWidget() {
       e.lineLimit = 3;
 
       w.addSpacer();
-      renderFooter(w, ui);
-
+      renderFooter(w);
       finish(w);
     });
 }
+
+// ===== UI Tuning =====
 
 function uiForFamily(fam) {
   // iOS: small / medium / large
   if (fam === "small") {
     return {
-      pad: 12,
+      pad: 10,
       titleFont: 14,
       subtitleFont: 10,
       pillFont: 10,
       bodyFont: 12,
-      subtitleText: "Porto",
+      showSubtitle: false,
+      subtitleText: "",
       afterHeaderSpace: 8,
       betweenCardsSpace: 8,
       maxTypes: 1,
@@ -141,8 +140,11 @@ function uiForFamily(fam) {
       cardTitleFont: 12,
       timeFont: 10,
       descFont: 10,
+      showDescriptions: false,
+      showExtraIntervals: false,
     };
   }
+
   if (fam === "large") {
     return {
       pad: 14,
@@ -150,6 +152,7 @@ function uiForFamily(fam) {
       subtitleFont: 11,
       pillFont: 11,
       bodyFont: 13,
+      showSubtitle: true,
       subtitleText: "Porto · Próximos avisos",
       afterHeaderSpace: 10,
       betweenCardsSpace: 10,
@@ -158,25 +161,33 @@ function uiForFamily(fam) {
       cardTitleFont: 13,
       timeFont: 11,
       descFont: 10,
+      showDescriptions: true,
+      showExtraIntervals: true,
     };
   }
-  // medium (segundo maior) – evitar cortes
+
+  // medium (o “segundo maior”) – super compacto para não cortar
   return {
-    pad: 12,
-    titleFont: 15,
+    pad: 10,
+    titleFont: 14,
     subtitleFont: 10,
     pillFont: 10,
     bodyFont: 13,
+    showSubtitle: true,
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 8,
     betweenCardsSpace: 9,
-    maxTypes: 2,
+    maxTypes: 1,          // medium: 1 tipo com mais detalhe costuma ser melhor
     maxBlocksPerType: 4,
     cardTitleFont: 12,
-    timeFont: 11,
+    timeFont: 10,
     descFont: 10,
+    showDescriptions: false,
+    showExtraIntervals: false,
   };
 }
+
+// ===== Rendering =====
 
 function renderEmptyState(w, ui) {
   var box = w.addStack();
@@ -206,7 +217,7 @@ function renderEmptyState(w, ui) {
   t2.lineLimit = 2;
 }
 
-function renderFooter(w, ui) {
+function renderFooter(w) {
   var footer = w.addStack();
   footer.centerAlignContent();
 
@@ -258,37 +269,30 @@ function renderTypeCard(w, group, ui, maxBlocksPerType) {
 
   card.addSpacer(8);
 
-  // Blocos (já com merge)
+  // Blocos (cada bloco = mesma gravidade + mesma descrição, com vários intervalos)
   var blocks = group.blocks;
-  var shown = Math.min(blocks.length, maxBlocksPerType);
+  // ordenar blocos por “primeiro start”
+  blocks.sort(function (a, b) {
+    return String(a.intervals[0].start || "").localeCompare(String(b.intervals[0].start || ""));
+  });
 
+  var shown = Math.min(blocks.length, maxBlocksPerType);
   for (var i = 0; i < shown; i++) {
-    if (i > 0) card.addSpacer(6);
-    renderMergedBlock(card, blocks[i], ui);
+    if (i > 0) card.addSpacer(8);
+    renderBlockWithIntervals(card, blocks[i], ui);
   }
 
-  // Se houver mais blocos, indicar quantos
   if (blocks.length > shown) {
-    card.addSpacer(8);
     var more = card.addText("+" + (blocks.length - shown) + " blocos");
     more.font = Font.systemFont(10);
     more.textColor = new Color("#7E8AA6");
   }
 }
 
-function renderMergedBlock(parent, block, ui) {
-  // Linha principal: intervalo (primeiro) + nível
+function renderBlockWithIntervals(parent, block, ui) {
+  // Linha 1: “Resumo” do bloco: nível + (opcional) 1a linha de descrição em large
   var row = parent.addStack();
   row.centerAlignContent();
-
-  var first = block.intervals[0];
-  var when = row.addText(shortPeriod(first.start, first.end));
-  when.font = Font.systemFont(ui.timeFont);
-  when.textColor = new Color("#A6B0C3");
-  when.lineLimit = 1;
-  if (when.minimumScaleFactor !== undefined) when.minimumScaleFactor = 0.7;
-
-  row.addSpacer();
 
   var lvl = (block.level || "").toLowerCase();
   var pill = row.addStack();
@@ -302,36 +306,34 @@ function renderMergedBlock(parent, block, ui) {
   txt.font = Font.boldSystemFont(10);
   txt.textColor = style.fg;
 
-  // Mostrar intervalos adicionais (compacto)
-  if (block.intervals.length > 1) {
-    parent.addSpacer(4);
+  row.addSpacer(8);
 
-    // Em medium/small mostramos só “+N intervalos”
-    // Em large mostramos até 2 extra (e depois +N)
-    if (ui.maxTypes >= 3) {
-      var extraToShow = Math.min(block.intervals.length - 1, 2);
-      for (var i = 0; i < extraToShow; i++) {
-        var itv = block.intervals[i + 1];
-        var line = parent.addText("· " + shortPeriod(itv.start, itv.end));
-        line.font = Font.systemFont(10);
-        line.textColor = new Color("#7E8AA6");
-        line.lineLimit = 1;
-        if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.75;
-      }
-      if (block.intervals.length - 1 > extraToShow) {
-        var more = parent.addText("· +" + (block.intervals.length - 1 - extraToShow) + " intervalos");
-        more.font = Font.systemFont(10);
-        more.textColor = new Color("#7E8AA6");
-      }
-    } else {
-      var more2 = parent.addText("· +" + (block.intervals.length - 1) + " intervalos");
-      more2.font = Font.systemFont(10);
-      more2.textColor = new Color("#7E8AA6");
-    }
+  var label = row.addText("Intervalos");
+  label.font = Font.systemFont(10);
+  label.textColor = new Color("#7E8AA6");
+
+  // Intervalos (lista)
+  var intervals = block.intervals;
+  var maxIntervalsToShow = ui.showExtraIntervals ? 4 : 4; // igual, mas no large mostramos também descrição
+  var shown = Math.min(intervals.length, maxIntervalsToShow);
+
+  for (var i = 0; i < shown; i++) {
+    var itv = intervals[i];
+    var line = parent.addText(shortPeriod(itv.start, itv.end));
+    line.font = Font.systemFont(ui.timeFont);
+    line.textColor = new Color("#A6B0C3");
+    line.lineLimit = 1;
+    if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.7;
   }
 
-  // Descrição: mostrar só em large, e curta
-  if (ui.maxTypes >= 3 && block.text) {
+  if (intervals.length > shown) {
+    var more = parent.addText("+" + (intervals.length - shown) + " intervalos");
+    more.font = Font.systemFont(10);
+    more.textColor = new Color("#7E8AA6");
+  }
+
+  // Descrição só em large (para não “rebentar” medium)
+  if (ui.showDescriptions && block.text) {
     parent.addSpacer(4);
     var d = parent.addText(block.text);
     d.font = Font.systemFont(ui.descFont);
@@ -340,7 +342,7 @@ function renderMergedBlock(parent, block, ui) {
   }
 }
 
-function renderHiddenTypesSummary(w, groups, startIdx, ui) {
+function renderHiddenTypesSummary(w, groups, startIdx) {
   var box = w.addStack();
   box.layoutVertically();
   box.setPadding(10, 12, 10, 12);
@@ -365,7 +367,74 @@ function renderHiddenTypesSummary(w, groups, startIdx, ui) {
   more.lineLimit = 2;
 }
 
-function applyStatusPill(pill, textNode, maxLevel, originalCount) {
+// ===== Grouping logic =====
+
+function groupByTypeThenByLevelText(warnings) {
+  // type -> {type, originalCount, maxLevel, blocksMap}
+  var map = {};
+  for (var i = 0; i < warnings.length; i++) {
+    var w = warnings[i];
+    var type = w.type || "Aviso";
+
+    if (!map[type]) {
+      map[type] = {
+        type: type,
+        originalCount: 0,
+        maxLevel: "green",
+        blocksMap: {} // key -> block
+      };
+    }
+
+    map[type].originalCount += 1;
+
+    var lvl = String(w.level || "").toLowerCase();
+    if (priority(lvl) > priority(map[type].maxLevel)) map[type].maxLevel = lvl;
+
+    // chave por (level + normalized text)
+    var key = lvl + "||" + normText(w.text);
+
+    if (!map[type].blocksMap[key]) {
+      map[type].blocksMap[key] = {
+        level: w.level,
+        text: w.text,
+        intervals: []
+      };
+    }
+
+    map[type].blocksMap[key].intervals.push({ start: w.start, end: w.end });
+  }
+
+  // transformar em array e ordenar intervalos
+  var out = [];
+  for (var k in map) {
+    if (!map.hasOwnProperty(k)) continue;
+
+    var blocks = [];
+    var bm = map[k].blocksMap;
+    for (var key2 in bm) {
+      if (!bm.hasOwnProperty(key2)) continue;
+
+      bm[key2].intervals.sort(function (a, b) {
+        return String(a.start || "").localeCompare(String(b.start || ""));
+      });
+
+      blocks.push(bm[key2]);
+    }
+
+    out.push({
+      type: map[k].type,
+      originalCount: map[k].originalCount,
+      maxLevel: map[k].maxLevel,
+      blocks: blocks
+    });
+  }
+
+  return out;
+}
+
+// ===== Status pill =====
+
+function applyStatusPill(pill, textNode, maxLevel, originalCount, ui) {
   if (!originalCount) {
     pill.backgroundColor = new Color("#15311F");
     textNode.textColor = new Color("#9AF0B5");
@@ -377,93 +446,12 @@ function applyStatusPill(pill, textNode, maxLevel, originalCount) {
   pill.backgroundColor = style.bg;
   textNode.textColor = style.fg;
 
-  textNode.text = originalCount + " avisos (máx. " + levelLabel(maxLevel) + ")";
-}
-
-function groupByTypeAndMerge(warnings) {
-  // map: type -> {type, originalCount, maxLevel, items[]}
-  var map = {};
-  for (var i = 0; i < warnings.length; i++) {
-    var w = warnings[i];
-    var type = w.type || "Aviso";
-
-    if (!map[type]) {
-      map[type] = { type: type, originalCount: 0, maxLevel: "green", items: [] };
-    }
-
-    map[type].originalCount += 1;
-    map[type].items.push(w);
-
-    var lvl = (w.level || "").toLowerCase();
-    if (priority(lvl) > priority(map[type].maxLevel)) map[type].maxLevel = lvl;
+  // No medium usamos texto mais curto para não cortar
+  if (ui && ui.maxTypes === 1 && ui.titleFont <= 14) {
+    textNode.text = originalCount + " (máx. " + levelLabel(maxLevel) + ")";
+  } else {
+    textNode.text = originalCount + " avisos (máx. " + levelLabel(maxLevel) + ")";
   }
-
-  var out = [];
-  for (var k in map) {
-    if (!map.hasOwnProperty(k)) continue;
-
-    // ordenar por start
-    map[k].items.sort(function (a, b) {
-      return String(a.start || "").localeCompare(String(b.start || ""));
-    });
-
-    // fazer merge consecutivo por same level + same text + end->start
-    var mergedBlocks = mergeConsecutiveSame(map[k].items);
-
-    out.push({
-      type: map[k].type,
-      originalCount: map[k].originalCount,
-      maxLevel: map[k].maxLevel,
-      blocks: mergedBlocks,
-    });
-  }
-  return out;
-}
-
-function mergeConsecutiveSame(items) {
-  var out = [];
-  for (var i = 0; i < items.length; i++) {
-    var cur = items[i];
-
-    var curLevel = String(cur.level || "").toLowerCase();
-    var curText = normText(cur.text);
-
-    var last = out.length ? out[out.length - 1] : null;
-
-    if (
-      last &&
-      String(last.level || "").toLowerCase() === curLevel &&
-      normText(last.text) === curText &&
-      areConsecutive(last.intervals[last.intervals.length - 1].end, cur.start)
-    ) {
-      last.intervals.push({ start: cur.start, end: cur.end });
-    } else {
-      out.push({
-        level: cur.level,
-        text: cur.text,
-        intervals: [{ start: cur.start, end: cur.end }],
-      });
-    }
-  }
-  return out;
-}
-
-function normText(s) {
-  return String(s || "").replace(/\s+/g, " ").trim();
-}
-
-function parseDateSafe(iso) {
-  var d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function areConsecutive(aEnd, bStart) {
-  // consecutivos se end == start, ou diferença <= 5 min
-  var da = parseDateSafe(aEnd);
-  var db = parseDateSafe(bStart);
-  if (!da || !db) return String(aEnd) === String(bStart);
-  var diffMs = Math.abs(db.getTime() - da.getTime());
-  return diffMs <= 5 * 60 * 1000;
 }
 
 function getMaxLevelFromWarnings(warnings) {
@@ -473,6 +461,12 @@ function getMaxLevelFromWarnings(warnings) {
     if (priority(lvl) > priority(max)) max = lvl;
   }
   return max;
+}
+
+// ===== Utils =====
+
+function normText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
 }
 
 function priority(level) {

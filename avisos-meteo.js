@@ -1,11 +1,17 @@
-// Avisos Meteo – Widget iOS (Scriptable) | UI moderna + agrupamento por tipo
+// Avisos Meteo – Widget iOS (Scriptable) | UI moderna + agrupamento por tipo + merge consecutivo
+// Endpoint: https://avisos-meteo.andremeneses.workers.dev/?area=PTO
 
 function runWidget() {
   var AREA = "PTO";
   var ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
 
+  var fam = (typeof config !== "undefined" && config.widgetFamily) ? config.widgetFamily : "medium";
+
+  // Afinar UI por tamanho (garantir que no "médio" o título não corta)
+  var ui = uiForFamily(fam);
+
   var w = new ListWidget();
-  w.setPadding(14, 14, 14, 14);
+  w.setPadding(ui.pad, ui.pad, ui.pad, ui.pad);
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=PTO";
 
@@ -17,12 +23,16 @@ function runWidget() {
   left.layoutVertically();
 
   var title = left.addText("Avisos IPMA");
-  title.font = Font.boldSystemFont(16);
+  title.font = Font.boldSystemFont(ui.titleFont);
   title.textColor = new Color("#FFFFFF");
+  title.lineLimit = 1;
+  if (title.minimumScaleFactor !== undefined) title.minimumScaleFactor = 0.7;
 
-  var subtitle = left.addText("Porto · Próximos avisos");
-  subtitle.font = Font.systemFont(11);
+  var subtitle = left.addText(ui.subtitleText);
+  subtitle.font = Font.systemFont(ui.subtitleFont);
   subtitle.textColor = new Color("#A6B0C3");
+  subtitle.lineLimit = 1;
+  if (subtitle.minimumScaleFactor !== undefined) subtitle.minimumScaleFactor = 0.7;
 
   header.addSpacer();
 
@@ -31,9 +41,9 @@ function runWidget() {
   statusPill.cornerRadius = 10;
 
   var statusText = statusPill.addText("…");
-  statusText.font = Font.boldSystemFont(11);
+  statusText.font = Font.boldSystemFont(ui.pillFont);
 
-  w.addSpacer(10);
+  w.addSpacer(ui.afterHeaderSpace);
 
   var req = new Request(ENDPOINT);
   req.timeoutInterval = 10;
@@ -41,20 +51,25 @@ function runWidget() {
   req.loadJSON()
     .then(function (data) {
       var warnings = (data && data.warnings) ? data.warnings : [];
+      var originalCount = warnings.length;
 
-      var maxLevel = getMaxLevel(warnings);
-      applyStatusPill(statusPill, statusText, maxLevel, warnings.length);
+      // Estado no topo (máx nível dos avisos originais)
+      var maxLevel = getMaxLevelFromWarnings(warnings);
+      applyStatusPill(statusPill, statusText, maxLevel, originalCount);
 
       if (!warnings.length) {
-        renderEmptyState(w);
+        renderEmptyState(w, ui);
+        // Empurrar footer para baixo
+        w.addSpacer();
+        renderFooter(w, ui);
         finish(w);
         return;
       }
 
-      // Agrupar por tipo
-      var groups = groupByType(warnings);
+      // Agrupar por tipo e fazer merge consecutivo (same level + same text + intervals consecutivos)
+      var groups = groupByTypeAndMerge(warnings);
 
-      // Ordenar tipos por “gravidade máxima”, depois por nome
+      // Ordenar tipos por gravidade máxima (do tipo), depois por nome
       groups.sort(function (a, b) {
         var pa = priority(a.maxLevel);
         var pb = priority(b.maxLevel);
@@ -62,32 +77,27 @@ function runWidget() {
         return a.type.localeCompare(b.type);
       });
 
-      // Limites por tamanho do widget
-      var fam = (config && config.widgetFamily) ? config.widgetFamily : "medium";
-      var maxTypes = fam === "large" ? 3 : 2;       // quantos tipos mostramos
-      var maxItemsPerType = fam === "large" ? 5 : 3; // quantos timeframes por tipo
+      // Render por tamanho
+      var maxTypes = ui.maxTypes;
+      var maxBlocksPerType = ui.maxBlocksPerType;
 
-      for (var gi = 0; gi < Math.min(groups.length, maxTypes); gi++) {
-        if (gi > 0) w.addSpacer(10);
-        renderTypeCard(w, groups[gi], maxItemsPerType, fam);
+      var shownTypes = Math.min(groups.length, maxTypes);
+      for (var gi = 0; gi < shownTypes; gi++) {
+        if (gi > 0) w.addSpacer(ui.betweenCardsSpace);
+        renderTypeCard(w, groups[gi], ui, maxBlocksPerType);
       }
 
-      w.addSpacer(10);
+      // Resumo do que não coube (tipos escondidos)
+      if (groups.length > shownTypes) {
+        w.addSpacer(ui.betweenCardsSpace);
+        renderHiddenTypesSummary(w, groups, shownTypes, ui);
+      }
 
-      // Footer
-      var footer = w.addStack();
-      footer.centerAlignContent();
+      // Empurrar footer para o fundo
+      w.addSpacer();
+      renderFooter(w, ui);
 
-      var updated = footer.addText("Atualizado " + fmtTime(new Date()));
-      updated.font = Font.systemFont(10);
-      updated.textColor = new Color("#7E8AA6");
-
-      footer.addSpacer();
-
-      var hint = footer.addText("Abrir IPMA ↗");
-      hint.font = Font.systemFont(10);
-      hint.textColor = new Color("#7E8AA6");
-
+      // refresh
       w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
 
       finish(w);
@@ -98,7 +108,7 @@ function runWidget() {
       statusText.text = "Erro";
 
       var t = w.addText("Não foi possível obter avisos.");
-      t.font = Font.systemFont(13);
+      t.font = Font.systemFont(ui.bodyFont);
       t.textColor = new Color("#FFFFFF");
       w.addSpacer(6);
 
@@ -107,11 +117,68 @@ function runWidget() {
       e.textColor = new Color("#A6B0C3");
       e.lineLimit = 3;
 
+      w.addSpacer();
+      renderFooter(w, ui);
+
       finish(w);
     });
 }
 
-function renderEmptyState(w) {
+function uiForFamily(fam) {
+  // iOS: small / medium / large
+  if (fam === "small") {
+    return {
+      pad: 12,
+      titleFont: 14,
+      subtitleFont: 10,
+      pillFont: 10,
+      bodyFont: 12,
+      subtitleText: "Porto",
+      afterHeaderSpace: 8,
+      betweenCardsSpace: 8,
+      maxTypes: 1,
+      maxBlocksPerType: 3,
+      cardTitleFont: 12,
+      timeFont: 10,
+      descFont: 10,
+    };
+  }
+  if (fam === "large") {
+    return {
+      pad: 14,
+      titleFont: 16,
+      subtitleFont: 11,
+      pillFont: 11,
+      bodyFont: 13,
+      subtitleText: "Porto · Próximos avisos",
+      afterHeaderSpace: 10,
+      betweenCardsSpace: 10,
+      maxTypes: 3,
+      maxBlocksPerType: 6,
+      cardTitleFont: 13,
+      timeFont: 11,
+      descFont: 10,
+    };
+  }
+  // medium (segundo maior) – evitar cortes
+  return {
+    pad: 12,
+    titleFont: 15,
+    subtitleFont: 10,
+    pillFont: 10,
+    bodyFont: 13,
+    subtitleText: "Porto · avisos",
+    afterHeaderSpace: 8,
+    betweenCardsSpace: 9,
+    maxTypes: 2,
+    maxBlocksPerType: 4,
+    cardTitleFont: 12,
+    timeFont: 11,
+    descFont: 10,
+  };
+}
+
+function renderEmptyState(w, ui) {
   var box = w.addStack();
   box.layoutVertically();
   box.setPadding(12, 12, 12, 12);
@@ -129,15 +196,32 @@ function renderEmptyState(w) {
   txtStack.layoutVertically();
 
   var t1 = txtStack.addText("Sem avisos");
-  t1.font = Font.boldSystemFont(14);
+  t1.font = Font.boldSystemFont(ui.bodyFont);
   t1.textColor = new Color("#FFFFFF");
+  t1.lineLimit = 1;
 
   var t2 = txtStack.addText("Nada relevante previsto para já.");
-  t2.font = Font.systemFont(11);
+  t2.font = Font.systemFont(ui.subtitleFont);
   t2.textColor = new Color("#A6B0C3");
+  t2.lineLimit = 2;
 }
 
-function renderTypeCard(w, group, maxItemsPerType, fam) {
+function renderFooter(w, ui) {
+  var footer = w.addStack();
+  footer.centerAlignContent();
+
+  var updated = footer.addText("Atualizado " + fmtTime(new Date()));
+  updated.font = Font.systemFont(10);
+  updated.textColor = new Color("#7E8AA6");
+
+  footer.addSpacer();
+
+  var hint = footer.addText("Abrir IPMA ↗");
+  hint.font = Font.systemFont(10);
+  hint.textColor = new Color("#7E8AA6");
+}
+
+function renderTypeCard(w, group, ui, maxBlocksPerType) {
   var card = w.addStack();
   card.layoutVertically();
   card.setPadding(12, 12, 12, 12);
@@ -154,8 +238,10 @@ function renderTypeCard(w, group, maxItemsPerType, fam) {
   top.addSpacer(6);
 
   var name = top.addText(group.type);
-  name.font = Font.boldSystemFont(13);
+  name.font = Font.boldSystemFont(ui.cardTitleFont);
   name.textColor = new Color("#FFFFFF");
+  name.lineLimit = 1;
+  if (name.minimumScaleFactor !== undefined) name.minimumScaleFactor = 0.75;
 
   top.addSpacer();
 
@@ -167,40 +253,44 @@ function renderTypeCard(w, group, maxItemsPerType, fam) {
   chip.backgroundColor = chipStyle.bg;
 
   var chipText = chip.addText(levelLabel(group.maxLevel));
-  chipText.font = Font.boldSystemFont(11);
+  chipText.font = Font.boldSystemFont(ui.pillFont);
   chipText.textColor = chipStyle.fg;
 
   card.addSpacer(8);
 
-  // Lista de timeframes (compacta)
-  var items = group.items.slice(0, maxItemsPerType);
-  for (var i = 0; i < items.length; i++) {
+  // Blocos (já com merge)
+  var blocks = group.blocks;
+  var shown = Math.min(blocks.length, maxBlocksPerType);
+
+  for (var i = 0; i < shown; i++) {
     if (i > 0) card.addSpacer(6);
-    renderTimeRow(card, items[i], fam);
+    renderMergedBlock(card, blocks[i], ui);
   }
 
-  // Se houver mais do que mostramos, indicar “+N”
-  if (group.items.length > items.length) {
+  // Se houver mais blocos, indicar quantos
+  if (blocks.length > shown) {
     card.addSpacer(8);
-    var more = card.addText("+" + (group.items.length - items.length) + " intervalos");
+    var more = card.addText("+" + (blocks.length - shown) + " blocos");
     more.font = Font.systemFont(10);
     more.textColor = new Color("#7E8AA6");
   }
 }
 
-function renderTimeRow(parent, warn, fam) {
+function renderMergedBlock(parent, block, ui) {
+  // Linha principal: intervalo (primeiro) + nível
   var row = parent.addStack();
   row.centerAlignContent();
 
-  // left: datas
-  var when = row.addText(shortPeriod(warn.start, warn.end));
-  when.font = Font.systemFont(11);
+  var first = block.intervals[0];
+  var when = row.addText(shortPeriod(first.start, first.end));
+  when.font = Font.systemFont(ui.timeFont);
   when.textColor = new Color("#A6B0C3");
+  when.lineLimit = 1;
+  if (when.minimumScaleFactor !== undefined) when.minimumScaleFactor = 0.7;
 
   row.addSpacer();
 
-  // right: nível
-  var lvl = (warn.level || "").toLowerCase();
+  var lvl = (block.level || "").toLowerCase();
   var pill = row.addStack();
   pill.setPadding(2, 7, 2, 7);
   pill.cornerRadius = 10;
@@ -212,46 +302,71 @@ function renderTimeRow(parent, warn, fam) {
   txt.font = Font.boldSystemFont(10);
   txt.textColor = style.fg;
 
-  // opcional: texto (só em large, para não rebentar)
-  if (fam === "large" && warn.text) {
+  // Mostrar intervalos adicionais (compacto)
+  if (block.intervals.length > 1) {
     parent.addSpacer(4);
-    var d = parent.addText(warn.text);
-    d.font = Font.systemFont(10);
+
+    // Em medium/small mostramos só “+N intervalos”
+    // Em large mostramos até 2 extra (e depois +N)
+    if (ui.maxTypes >= 3) {
+      var extraToShow = Math.min(block.intervals.length - 1, 2);
+      for (var i = 0; i < extraToShow; i++) {
+        var itv = block.intervals[i + 1];
+        var line = parent.addText("· " + shortPeriod(itv.start, itv.end));
+        line.font = Font.systemFont(10);
+        line.textColor = new Color("#7E8AA6");
+        line.lineLimit = 1;
+        if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.75;
+      }
+      if (block.intervals.length - 1 > extraToShow) {
+        var more = parent.addText("· +" + (block.intervals.length - 1 - extraToShow) + " intervalos");
+        more.font = Font.systemFont(10);
+        more.textColor = new Color("#7E8AA6");
+      }
+    } else {
+      var more2 = parent.addText("· +" + (block.intervals.length - 1) + " intervalos");
+      more2.font = Font.systemFont(10);
+      more2.textColor = new Color("#7E8AA6");
+    }
+  }
+
+  // Descrição: mostrar só em large, e curta
+  if (ui.maxTypes >= 3 && block.text) {
+    parent.addSpacer(4);
+    var d = parent.addText(block.text);
+    d.font = Font.systemFont(ui.descFont);
     d.textColor = new Color("#D5DBE7");
     d.lineLimit = 2;
   }
 }
 
-function groupByType(warnings) {
-  var map = {}; // type -> {type, items, maxLevel}
-  for (var i = 0; i < warnings.length; i++) {
-    var w = warnings[i];
-    var type = w.type || "Aviso";
-    if (!map[type]) {
-      map[type] = { type: type, items: [], maxLevel: "green" };
-    }
-    map[type].items.push(w);
+function renderHiddenTypesSummary(w, groups, startIdx, ui) {
+  var box = w.addStack();
+  box.layoutVertically();
+  box.setPadding(10, 12, 10, 12);
+  box.cornerRadius = 16;
+  box.backgroundColor = new Color("#0F1930");
 
-    var lvl = (w.level || "").toLowerCase();
-    if (priority(lvl) > priority(map[type].maxLevel)) {
-      map[type].maxLevel = lvl;
-    }
+  var t = box.addText("Outros:");
+  t.font = Font.boldSystemFont(11);
+  t.textColor = new Color("#A6B0C3");
+
+  box.addSpacer(6);
+
+  var line = "";
+  for (var j = startIdx; j < groups.length; j++) {
+    if (line.length > 0) line += " · ";
+    line += groups[j].type + " (" + groups[j].originalCount + ")";
   }
 
-  // ordenar items dentro de cada tipo por start
-  var out = [];
-  for (var k in map) {
-    if (!map.hasOwnProperty(k)) continue;
-    map[k].items.sort(function (a, b) {
-      return String(a.start || "").localeCompare(String(b.start || ""));
-    });
-    out.push(map[k]);
-  }
-  return out;
+  var more = box.addText(line);
+  more.font = Font.systemFont(10);
+  more.textColor = new Color("#7E8AA6");
+  more.lineLimit = 2;
 }
 
-function applyStatusPill(pill, textNode, maxLevel, totalCount) {
-  if (!totalCount) {
+function applyStatusPill(pill, textNode, maxLevel, originalCount) {
+  if (!originalCount) {
     pill.backgroundColor = new Color("#15311F");
     textNode.textColor = new Color("#9AF0B5");
     textNode.text = "Sem avisos";
@@ -262,11 +377,96 @@ function applyStatusPill(pill, textNode, maxLevel, totalCount) {
   pill.backgroundColor = style.bg;
   textNode.textColor = style.fg;
 
-  // mais explícito do que “Laranja · 4”
-  textNode.text = totalCount + " avisos · máx " + levelLabel(maxLevel);
+  textNode.text = originalCount + " avisos (máx. " + levelLabel(maxLevel) + ")";
 }
 
-function getMaxLevel(warnings) {
+function groupByTypeAndMerge(warnings) {
+  // map: type -> {type, originalCount, maxLevel, items[]}
+  var map = {};
+  for (var i = 0; i < warnings.length; i++) {
+    var w = warnings[i];
+    var type = w.type || "Aviso";
+
+    if (!map[type]) {
+      map[type] = { type: type, originalCount: 0, maxLevel: "green", items: [] };
+    }
+
+    map[type].originalCount += 1;
+    map[type].items.push(w);
+
+    var lvl = (w.level || "").toLowerCase();
+    if (priority(lvl) > priority(map[type].maxLevel)) map[type].maxLevel = lvl;
+  }
+
+  var out = [];
+  for (var k in map) {
+    if (!map.hasOwnProperty(k)) continue;
+
+    // ordenar por start
+    map[k].items.sort(function (a, b) {
+      return String(a.start || "").localeCompare(String(b.start || ""));
+    });
+
+    // fazer merge consecutivo por same level + same text + end->start
+    var mergedBlocks = mergeConsecutiveSame(map[k].items);
+
+    out.push({
+      type: map[k].type,
+      originalCount: map[k].originalCount,
+      maxLevel: map[k].maxLevel,
+      blocks: mergedBlocks,
+    });
+  }
+  return out;
+}
+
+function mergeConsecutiveSame(items) {
+  var out = [];
+  for (var i = 0; i < items.length; i++) {
+    var cur = items[i];
+
+    var curLevel = String(cur.level || "").toLowerCase();
+    var curText = normText(cur.text);
+
+    var last = out.length ? out[out.length - 1] : null;
+
+    if (
+      last &&
+      String(last.level || "").toLowerCase() === curLevel &&
+      normText(last.text) === curText &&
+      areConsecutive(last.intervals[last.intervals.length - 1].end, cur.start)
+    ) {
+      last.intervals.push({ start: cur.start, end: cur.end });
+    } else {
+      out.push({
+        level: cur.level,
+        text: cur.text,
+        intervals: [{ start: cur.start, end: cur.end }],
+      });
+    }
+  }
+  return out;
+}
+
+function normText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
+}
+
+function parseDateSafe(iso) {
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function areConsecutive(aEnd, bStart) {
+  // consecutivos se end == start, ou diferença <= 5 min
+  var da = parseDateSafe(aEnd);
+  var db = parseDateSafe(bStart);
+  if (!da || !db) return String(aEnd) === String(bStart);
+  var diffMs = Math.abs(db.getTime() - da.getTime());
+  return diffMs <= 5 * 60 * 1000;
+}
+
+function getMaxLevelFromWarnings(warnings) {
   var max = "green";
   for (var i = 0; i < warnings.length; i++) {
     var lvl = (warnings[i].level || "").toLowerCase();
@@ -311,13 +511,12 @@ function iconForType(type) {
 }
 
 function shortPeriod(startIso, endIso) {
-  // compacto: "ter 16 12:37 → qua 17 03:00"
   return shortDate(startIso) + " → " + shortDate(endIso);
 }
 
 function shortDate(iso) {
   try {
-    var d = new Date(iso);
+    var d = new Date(iso); // converte para timezone do iPhone automaticamente
     return d.toLocaleString("pt-PT", {
       weekday: "short",
       day: "2-digit",

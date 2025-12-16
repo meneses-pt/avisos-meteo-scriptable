@@ -66,7 +66,7 @@ function runWidget() {
       }
 
       // Agrupar por tipo, e dentro do tipo agrupar por (level + description)
-      var groups = groupByTypeThenByLevelText(warnings);
+      var groups = groupByTypeSequential(warnings);
 
       // Ordenar tipos por gravidade máxima
       groups.sort(function (a, b) {
@@ -369,9 +369,10 @@ function renderHiddenTypesSummary(w, groups, startIdx) {
 
 // ===== Grouping logic =====
 
-function groupByTypeThenByLevelText(warnings) {
-  // type -> {type, originalCount, maxLevel, blocksMap}
+function groupByTypeSequential(warnings) {
+  // type -> { type, originalCount, maxLevel, blocks[] }
   var map = {};
+
   for (var i = 0; i < warnings.length; i++) {
     var w = warnings[i];
     var type = w.type || "Aviso";
@@ -381,51 +382,65 @@ function groupByTypeThenByLevelText(warnings) {
         type: type,
         originalCount: 0,
         maxLevel: "green",
-        blocksMap: {} // key -> block
+        blocks: []
       };
     }
 
     map[type].originalCount += 1;
 
     var lvl = String(w.level || "").toLowerCase();
-    if (priority(lvl) > priority(map[type].maxLevel)) map[type].maxLevel = lvl;
-
-    // chave por (level + normalized text)
-    var key = lvl + "||" + normText(w.text);
-
-    if (!map[type].blocksMap[key]) {
-      map[type].blocksMap[key] = {
-        level: w.level,
-        text: w.text,
-        intervals: []
-      };
+    if (priority(lvl) > priority(map[type].maxLevel)) {
+      map[type].maxLevel = lvl;
     }
 
-    map[type].blocksMap[key].intervals.push({ start: w.start, end: w.end });
+    map[type].blocks.push({
+      level: w.level,
+      text: w.text,
+      start: w.start,
+      end: w.end
+    });
   }
 
-  // transformar em array e ordenar intervalos
+  // Agora, para cada tipo, ordenar e AGRUPAR SEQUENCIALMENTE
   var out = [];
+
   for (var k in map) {
     if (!map.hasOwnProperty(k)) continue;
 
-    var blocks = [];
-    var bm = map[k].blocksMap;
-    for (var key2 in bm) {
-      if (!bm.hasOwnProperty(key2)) continue;
+    var items = map[k].blocks;
 
-      bm[key2].intervals.sort(function (a, b) {
-        return String(a.start || "").localeCompare(String(b.start || ""));
-      });
+    // ordenar por start
+    items.sort(function (a, b) {
+      return String(a.start || "").localeCompare(String(b.start || ""));
+    });
 
-      blocks.push(bm[key2]);
+    var merged = [];
+    for (var j = 0; j < items.length; j++) {
+      var cur = items[j];
+      var last = merged.length ? merged[merged.length - 1] : null;
+
+      if (
+        last &&
+        String(last.level) === String(cur.level) &&
+        normText(last.text) === normText(cur.text)
+      ) {
+        // mesmo bloco → adiciona intervalo
+        last.intervals.push({ start: cur.start, end: cur.end });
+      } else {
+        // novo bloco
+        merged.push({
+          level: cur.level,
+          text: cur.text,
+          intervals: [{ start: cur.start, end: cur.end }]
+        });
+      }
     }
 
     out.push({
       type: map[k].type,
       originalCount: map[k].originalCount,
       maxLevel: map[k].maxLevel,
-      blocks: blocks
+      blocks: merged
     });
   }
 

@@ -1,7 +1,8 @@
 // Script remoto (GitHub raw) para Scriptable
 // Requer: o loader chama `await main()`
-// Fonte de dados: Cloudflare Worker
+// Fonte: Cloudflare Worker
 // Anti-timeout: timeout curto + cache local dos avisos
+// Timeline: início e fim em linhas diferentes; o fim só aparece se for diferente do início seguinte
 
 async function main() {
   const AREA = "PTO";
@@ -10,19 +11,17 @@ async function main() {
   const fam = (typeof config !== "undefined" && config.widgetFamily) ? config.widgetFamily : "medium";
   const ui = uiForFamily(fam);
 
-  /* ===== Cache warnings ===== */
   const fm = FileManager.local();
   const cacheDir = fm.joinPath(fm.documentsDirectory(), "avisos-meteo");
   const cachePath = fm.joinPath(cacheDir, `warnings-${AREA}.json`);
   if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir, true);
 
-  /* ===== Widget base ===== */
   const w = new ListWidget();
   w.setPadding(ui.pad, ui.pad, ui.pad, ui.pad);
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=" + AREA;
 
-  /* ===== Header ===== */
+  // Header
   const header = w.addStack();
   header.centerAlignContent();
 
@@ -42,7 +41,7 @@ async function main() {
   pillText.font = Font.boldSystemFont(ui.pillFont);
 
   if (ui.showSubtitle) {
-    w.addSpacer(4); // mais ar no topo
+    w.addSpacer(4);
     const sub = w.addText(ui.subtitleText);
     sub.font = Font.systemFont(ui.subtitleFont);
     sub.textColor = new Color("#A6B0C3");
@@ -50,27 +49,22 @@ async function main() {
 
   w.addSpacer(ui.afterHeaderSpace);
 
-  /* ===== Load cached payload (if exists) ===== */
+  // Cache read
   let cached = null;
   if (fm.fileExists(cachePath)) {
-    try {
-      cached = JSON.parse(fm.readString(cachePath));
-    } catch {
-      cached = null;
-    }
+    try { cached = JSON.parse(fm.readString(cachePath)); } catch {}
   }
 
-  /* ===== Fetch online (fast) ===== */
+  // Fetch online (fast)
   let data = null;
   let fetchError = null;
 
   try {
     const req = new Request(ENDPOINT);
-    req.timeoutInterval = 5; // crítico para widgets
+    req.timeoutInterval = 5;
     req.headers = { Accept: "application/json" };
     data = await req.loadJSON();
 
-    // Guardar cache se válido
     if (data && typeof data === "object" && Array.isArray(data.warnings)) {
       fm.writeString(cachePath, JSON.stringify({
         savedAt: new Date().toISOString(),
@@ -82,12 +76,12 @@ async function main() {
     data = null;
   }
 
-  /* ===== Pick source ===== */
+  // Pick source
   let payload = null;
   let fromCache = false;
   let cachedAt = null;
 
-  if (data && data.warnings && Array.isArray(data.warnings)) {
+  if (data && Array.isArray(data.warnings)) {
     payload = data;
   } else if (cached && cached.payload && Array.isArray(cached.payload.warnings)) {
     payload = cached.payload;
@@ -97,32 +91,21 @@ async function main() {
     payload = { warnings: [] };
   }
 
-  // Parsing defensivo final
   const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
 
-  /* ===== Top pill ===== */
-  const maxLevel = getMaxLevel(warnings);
-  setTopPill(pill, pillText, warnings.length, maxLevel);
+  // Top pill
+  setTopPill(pill, pillText, warnings.length, getMaxLevel(warnings));
 
-  /* ===== Empty state ===== */
   if (!warnings.length) {
     const t = w.addText("Sem avisos relevantes.");
     t.font = Font.systemFont(ui.bodyFont);
     t.textColor = new Color("#D5DBE7");
 
-    // Se não conseguiu buscar online e havia erro, dá uma pista leve
     if (fetchError && !fromCache) {
       w.addSpacer(6);
       const e = w.addText("Sem rede/timeout.");
       e.font = Font.systemFont(10);
       e.textColor = new Color("#7E8AA6");
-    }
-
-    if (fromCache && cachedAt) {
-      w.addSpacer(6);
-      const c = w.addText("Offline · cache " + shortWhen(cachedAt));
-      c.font = Font.systemFont(10);
-      c.textColor = new Color("#7E8AA6");
     }
 
     w.addSpacer();
@@ -131,7 +114,7 @@ async function main() {
     return;
   }
 
-  /* ===== Render groups ===== */
+  // Render groups
   const groups = groupByType(warnings);
   groups.sort((a, b) => priority(b.maxLevel) - priority(a.maxLevel));
 
@@ -143,9 +126,7 @@ async function main() {
   w.addSpacer();
   renderFooter(w, fromCache, cachedAt);
 
-  // ajuda o iOS a tentar refrescar mais tarde
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
-
   finish(w);
 }
 
@@ -163,11 +144,12 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       timelineFont: 13,
+      timelineFontSmall: 11,
       descFont: 12,
       levelFont: 11,
       rightColWidth: 190,
       cardTitleFont: 13,
-      maxTimelineRows: 14,
+      maxTimelineBlocks: 14,
     };
   }
   if (fam === "small") {
@@ -181,11 +163,12 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       timelineFont: 12,
+      timelineFontSmall: 10,
       descFont: 11,
       levelFont: 10,
       rightColWidth: 150,
       cardTitleFont: 12,
-      maxTimelineRows: 8,
+      maxTimelineBlocks: 8,
     };
   }
   // medium
@@ -199,11 +182,12 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     timelineFont: 12,
+    timelineFontSmall: 10,
     descFont: 12,
     levelFont: 10,
     rightColWidth: 165,
     cardTitleFont: 12,
-    maxTimelineRows: 10,
+    maxTimelineBlocks: 10,
   };
 }
 
@@ -244,7 +228,7 @@ function renderTypeCard(w, group, ui) {
   right.layoutVertically();
   right.size = new Size(ui.rightColWidth, 0);
 
-  // RIGHT: descrições por nível (wrap natural) — escolhe descrição que começa primeiro por nível
+  // RIGHT: descrições por nível (wrap natural, sem pills/bolas)
   const summaries = buildLevelSummaries(group.items);
   for (let i = 0; i < summaries.length; i++) {
     const s = summaries[i];
@@ -259,38 +243,118 @@ function renderTypeCard(w, group, ui) {
     const txt = right.addText(s.text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // sem lineLimit -> wrap
   }
 
-  // LEFT: timeline (limitado por performance)
+  // LEFT: timeline em 2 linhas (início sempre; fim só se diferente do início seguinte)
   const items = [...group.items].sort((a, b) =>
     String(a.start || "").localeCompare(String(b.start || ""))
   );
 
-  const shown = items.slice(0, ui.maxTimelineRows);
+  const blocks = buildTimelineBlocks(items);
+  const shown = blocks.slice(0, ui.maxTimelineBlocks);
+
   for (let i = 0; i < shown.length; i++) {
-    const it = shown[i];
-    if (i > 0) left.addSpacer(6);
+    if (i > 0) left.addSpacer(8);
 
-    const row = left.addStack();
-    row.centerAlignContent();
+    const b = shown[i];
 
-    const dot = row.addText("●");
+    // Linha 1: dot + start
+    const r1 = left.addStack();
+    r1.centerAlignContent();
+
+    const dot = r1.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
-    dot.textColor = levelColor(it.level);
+    dot.textColor = levelColor(b.level);
 
-    row.addSpacer(8);
+    r1.addSpacer(8);
 
-    const time = row.addText(formatPeriod(it.start, it.end));
-    time.font = Font.systemFont(ui.timelineFont);
-    time.textColor = new Color("#A6B0C3");
+    const startText = r1.addText(b.startLabel);
+    startText.font = Font.systemFont(ui.timelineFont);
+    startText.textColor = new Color("#A6B0C3");
+    startText.lineLimit = 1; // não queremos wrap aqui, é curto
+
+    // Linha 2 (opcional): end, alinhada com o texto (sem dot)
+    if (b.endLabel) {
+      const r2 = left.addStack();
+      r2.centerAlignContent();
+      r2.addSpacer(8 + 18); // indent approx (dot + gap). Ajusta se quiseres.
+
+      const endText = r2.addText(b.endLabel);
+      endText.font = Font.systemFont(ui.timelineFontSmall);
+      endText.textColor = new Color("#7E8AA6");
+      endText.lineLimit = 1;
+    }
   }
 
-  if (items.length > shown.length) {
+  if (blocks.length > shown.length) {
     left.addSpacer(6);
-    const more = left.addText("+" + (items.length - shown.length));
+    const more = left.addText("+" + (blocks.length - shown.length));
     more.font = Font.systemFont(10);
     more.textColor = new Color("#7E8AA6");
+  }
+}
+
+/* ================= Timeline blocks ================= */
+
+// Regra: mostrar start; mostrar end só se end != next.start (em ms)
+function buildTimelineBlocks(items) {
+  const out = [];
+  for (let i = 0; i < items.length; i++) {
+    const cur = items[i];
+    const next = (i + 1 < items.length) ? items[i + 1] : null;
+
+    const startMs = safeMs(cur.start);
+    const endMs = safeMs(cur.end);
+    const nextStartMs = next ? safeMs(next.start) : null;
+
+    const startLabel = fmtStart(cur.start);
+    let endLabel = null;
+
+    // mostrar fim se:
+    // - for o último, ou
+    // - não for igual ao início do próximo
+    if (endMs !== null) {
+      const shouldShowEnd = (nextStartMs === null) || (endMs !== nextStartMs);
+      if (shouldShowEnd) endLabel = "até " + fmtEnd(cur.end);
+    }
+
+    out.push({
+      level: String(cur.level || "green").toLowerCase(),
+      startLabel,
+      endLabel
+    });
+  }
+  return out;
+}
+
+function safeMs(iso) {
+  try {
+    const d = new Date(iso);
+    const ms = d.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
+function fmtStart(iso) {
+  try {
+    const d = new Date(iso);
+    const wd = d.toLocaleDateString("pt-PT", { weekday: "short" });
+    const hm = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+    return wd + " " + hm;
+  } catch {
+    return "";
+  }
+}
+
+function fmtEnd(iso) {
+  try {
+    const d = new Date(iso);
+    // aqui podes decidir se queres repetir o dia no fim; por agora só hora fica mais compacto
+    return d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
   }
 }
 
@@ -317,27 +381,25 @@ function groupByType(warnings) {
   return Object.values(map);
 }
 
-// Para cada nível, escolhe o aviso com start mais cedo (se houver descrições diferentes)
+// Para cada nível: descrição do aviso mais cedo
 function buildLevelSummaries(items) {
   const byLevel = {};
   for (let i = 0; i < items.length; i++) {
     const w = items[i];
-    if (!w) continue;
     const lvl = String(w.level || "").toLowerCase();
-    if (!lvl) continue;
-
     const start = String(w.start || "");
+    const txt = normText(w.text);
+
     if (!byLevel[lvl]) {
-      byLevel[lvl] = { level: lvl, text: normText(w.text), firstStart: start };
+      byLevel[lvl] = { level: lvl, text: txt, firstStart: start };
     } else {
       if (start && byLevel[lvl].firstStart && start.localeCompare(byLevel[lvl].firstStart) < 0) {
         byLevel[lvl].firstStart = start;
-        byLevel[lvl].text = normText(w.text);
+        byLevel[lvl].text = txt;
       }
-      if (!byLevel[lvl].text && w.text) byLevel[lvl].text = normText(w.text);
+      if (!byLevel[lvl].text && txt) byLevel[lvl].text = txt;
     }
   }
-
   return Object.values(byLevel).sort((a, b) => priority(b.level) - priority(a.level));
 }
 
@@ -358,21 +420,6 @@ function renderFooter(w, fromCache, cachedAtIso) {
     const line2 = w.addText("Offline · cache " + shortWhen(cachedAtIso));
     line2.font = Font.systemFont(10);
     line2.textColor = new Color("#7E8AA6");
-  }
-}
-
-/* ================= Time ================= */
-
-function formatPeriod(startIso, endIso) {
-  try {
-    const s = new Date(startIso);
-    const e = new Date(endIso);
-    const wd = s.toLocaleDateString("pt-PT", { weekday: "short" });
-    const sh = s.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-    const eh = e.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-    return wd + " " + sh + "–" + eh;
-  } catch {
-    return "";
   }
 }
 

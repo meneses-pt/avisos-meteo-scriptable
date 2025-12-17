@@ -211,7 +211,18 @@ function renderTypeCard(w, group, ui) {
   right.size = new Size(ui.rightColWidth, 0);
 
   // *** ISTO FORÇA MESMO O CARD A OCUPAR A LARGURA TODA ***
-  content.addSpacer();
+  const content = card.addStack();
+  content.topAlignContent();
+  content.size = new Size(0, 0);
+  
+  const left = content.addStack();
+  left.layoutVertically();
+  
+  content.addSpacer(10);
+  
+  const right = content.addStack();
+  right.layoutVertically();
+  right.size = new Size(ui.rightColWidth, 0);
 
   // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
   const summaries = buildLevelSummaries(group.items)
@@ -237,35 +248,35 @@ function renderTypeCard(w, group, ui) {
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
   for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) left.addSpacer(ui.blockGap);
-
-    const r1 = left.addStack();
-    r1.centerAlignContent();
-
-    const dot = r1.addText("●");
+    if (i > 0) left.addSpacer(3); // mais compacto
+  
+    const row = left.addStack();
+    row.centerAlignContent();
+  
+    const dot = row.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
     dot.textColor = levelColor(blocks[i].level);
-
-    r1.addSpacer(ui.dotGap);
-
-    const start = r1.addText(blocks[i].startLabel);
+  
+    row.addSpacer(5);
+  
+    const start = row.addText(blocks[i].startLabel);
     start.font = Font.systemFont(ui.timelineFont);
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
-
+  
+    // só cria a segunda linha se existir "até"
     if (blocks[i].endLabel) {
-      left.addSpacer(ui.lineGap);
-
-      const r2 = left.addStack();
-      r2.addSpacer(ui.indent);
-
-      const end = r2.addText(blocks[i].endLabel);
+      left.addSpacer(1);
+  
+      const endRow = left.addStack();
+      endRow.addSpacer(ui.indent);
+  
+      const end = endRow.addText(blocks[i].endLabel);
       end.font = Font.systemFont(ui.timelineFontSmall);
       end.textColor = new Color("#7E8AA6");
       end.lineLimit = 1;
     }
   }
-}
 
 /* ================= DATA ================= */
 

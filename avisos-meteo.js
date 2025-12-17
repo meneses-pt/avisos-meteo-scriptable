@@ -109,7 +109,7 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
-      leftColWidth: 140,
+      leftColWidth: 110,
       colGap: 12,
       levelFont: 11,
       descFont: 12,
@@ -198,12 +198,12 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // LAYOUT HORIZONTAL COM LARGURAS FIXAS
+  // LAYOUT HORIZONTAL - alinhado ao topo
   const content = card.addStack();
   content.layoutHorizontally();
-  content.topAlignContent();
+  // SEM topAlignContent() - deixa natural
   
-  // Coluna esquerda: timeline (largura fixa)
+  // Coluna esquerda: timeline (largura menor = mais espaço à direita)
   const left = content.addStack();
   left.layoutVertically();
   left.size = new Size(ui.leftColWidth, 0);
@@ -215,7 +215,7 @@ function renderTypeCard(w, group, ui) {
   const right = content.addStack();
   right.layoutVertically();
 
-  // LEFT: timeline compacta (2 linhas)
+  // LEFT: timeline compacta
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
   for (let i = 0; i < blocks.length; i++) {
@@ -248,7 +248,7 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
+  // RIGHT: legendas ordenadas
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
@@ -258,14 +258,13 @@ function renderTypeCard(w, group, ui) {
     const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
-    lvl.lineLimit = 1;
 
     right.addSpacer(3);
 
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    txt.lineLimit = 0;
+    // SEM lineLimit - deixa fazer wrap natural
   }
 }
 

@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.13";
+const SCRIPT_VERSION = "v1.0.14";
 
 async function main() {
   const AREA = "PTO";
@@ -341,7 +341,6 @@ function renderTypeCard(w, group, ui) {
   // ===== COLUNA DIREITA: Legendas =====
   const right = content.addStack();
   right.layoutVertically();
-  right.size = new Size(ui.rightColWidth, 0);
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -364,7 +363,6 @@ function renderTypeCard(w, group, ui) {
     const txt = right.addText(joinedText);
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    txt.lineLimit = lines.length;
   }
 }
 

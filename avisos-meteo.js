@@ -1,25 +1,25 @@
-// Avisos Meteo – Widget iOS (Scriptable)
-// 2 colunas por categoria, descrições editoriais, timeline legível
+// Avisos IPMA – Widget iOS (Scriptable)
+// Layout 2 colunas: timeline à esquerda, descrições à direita
 // Fonte: Cloudflare Worker
 
 function runWidget() {
-  var AREA = "PTO";
-  var ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
+  const AREA = "PTO";
+  const ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
 
-  var fam = config.widgetFamily || "medium";
-  var ui = uiForFamily(fam);
+  const fam = config.widgetFamily || "medium";
+  const ui = uiForFamily(fam);
 
-  var w = new ListWidget();
+  const w = new ListWidget();
   w.setPadding(ui.pad, ui.pad, ui.pad, ui.pad);
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=" + AREA;
 
   /* ================= HEADER ================= */
 
-  var header = w.addStack();
+  const header = w.addStack();
   header.centerAlignContent();
 
-  var title = header.addText("Avisos IPMA");
+  const title = header.addText("Avisos IPMA");
   title.font = Font.boldSystemFont(ui.titleFont);
   title.textColor = Color.white();
   title.lineLimit = 1;
@@ -27,16 +27,16 @@ function runWidget() {
 
   header.addSpacer();
 
-  var pill = header.addStack();
+  const pill = header.addStack();
   pill.setPadding(4, 10, 4, 10);
   pill.cornerRadius = 10;
 
-  var pillText = pill.addText("…");
+  const pillText = pill.addText("…");
   pillText.font = Font.boldSystemFont(ui.pillFont);
 
   if (ui.showSubtitle) {
-    w.addSpacer(2);
-    var sub = w.addText(ui.subtitleText);
+    w.addSpacer(4); // MAIS AR NO TOPO
+    const sub = w.addText(ui.subtitleText);
     sub.font = Font.systemFont(ui.subtitleFont);
     sub.textColor = new Color("#A6B0C3");
   }
@@ -45,27 +45,37 @@ function runWidget() {
 
   /* ================= DATA ================= */
 
-  var req = new Request(ENDPOINT);
-  req.loadJSON().then(function (data) {
-    var warnings = data.warnings || [];
+  const req = new Request(ENDPOINT);
+  req.timeoutInterval = 10;
 
-    var maxLevel = getMaxLevel(warnings);
+  req.loadJSON().then(data => {
+    const warnings = data.warnings || [];
+
+    const maxLevel = getMaxLevel(warnings);
     setTopPill(pill, pillText, warnings.length, maxLevel);
 
     if (!warnings.length) {
-      w.addText("Sem avisos relevantes.")
-        .font = Font.systemFont(ui.bodyFont);
+      const t = w.addText("Sem avisos relevantes.");
+      t.font = Font.systemFont(ui.bodyFont);
+      t.textColor = new Color("#D5DBE7");
       finish(w);
       return;
     }
 
-    var groups = groupByType(warnings);
+    const groups = groupByType(warnings);
     groups.sort((a, b) => priority(b.maxLevel) - priority(a.maxLevel));
 
-    renderType(w, groups[0], ui); // medium: só 1 tipo
+    for (let i = 0; i < groups.length; i++) {
+      if (i > 0) w.addSpacer(10);
+      renderTypeCard(w, groups[i], ui);
+    }
 
     w.addSpacer();
     renderFooter(w);
+    finish(w);
+  }).catch(err => {
+    const e = w.addText("Erro ao carregar avisos");
+    e.textColor = Color.red();
     finish(w);
   });
 }
@@ -82,13 +92,15 @@ function uiForFamily(fam) {
       bodyFont: 13,
       showSubtitle: true,
       subtitleText: "Porto · próximos avisos",
-      afterHeaderSpace: 12,
+      afterHeaderSpace: 14,
       timelineFont: 13,
       descFont: 12,
       levelFont: 11,
-      rightColWidth: 180
+      rightColWidth: 190
     };
   }
+
+  // medium (default)
   return {
     pad: 10,
     titleFont: 14,
@@ -97,79 +109,116 @@ function uiForFamily(fam) {
     bodyFont: 13,
     showSubtitle: true,
     subtitleText: "Porto · avisos",
-    afterHeaderSpace: 10,
+    afterHeaderSpace: 12,
     timelineFont: 12,
     descFont: 12,
     levelFont: 10,
-    rightColWidth: 160
+    rightColWidth: 165
   };
 }
 
-/* ================= TYPE RENDER ================= */
+/* ================= CARD RENDER ================= */
 
-function renderType(w, group, ui) {
-  var card = w.addStack();
+function renderTypeCard(w, group, ui) {
+  const card = w.addStack();
   card.layoutVertically();
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // Title
-  var t = card.addText(group.type);
-  t.font = Font.boldSystemFont(13);
-  t.textColor = Color.white();
+  /* Header da categoria */
+  const top = card.addStack();
+  top.centerAlignContent();
+
+  const emoji = top.addText(iconForType(group.type));
+  emoji.font = Font.systemFont(ui.cardTitleFont + 2);
+
+  top.addSpacer(6);
+
+  const name = top.addText(group.type);
+  name.font = Font.boldSystemFont(ui.cardTitleFont);
+  name.textColor = Color.white();
+  name.lineLimit = 1;
+  name.minimumScaleFactor = 0.75;
 
   card.addSpacer(10);
 
-  var content = card.addStack();
+  /* Conteúdo 2 colunas */
+  const content = card.addStack();
+  content.topAlignContent();
 
-  /* LEFT: TIMELINE */
-  var left = content.addStack();
+  const left = content.addStack();
   left.layoutVertically();
 
   content.addSpacer(12);
 
-  /* RIGHT: DESCRIPTIONS */
-  var right = content.addStack();
+  const right = content.addStack();
   right.layoutVertically();
   right.size = new Size(ui.rightColWidth, 0);
 
-  // Descriptions grouped by level
-  var summaries = levelSummaries(group.items);
-  summaries.forEach(function (s) {
-    var lvl = right.addText(levelLabel(s.level).toUpperCase());
+  /* RIGHT – descrições (wrap livre) */
+  const summaries = buildLevelSummaries(group.items);
+  summaries.forEach((s, idx) => {
+    if (idx > 0) right.addSpacer(10);
+
+    const lvl = right.addText(levelLabel(s.level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(s.level);
 
-    right.addSpacer(2);
+    right.addSpacer(4);
 
-    var txt = right.addText(s.text);
+    const txt = right.addText(s.text);
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-
-    right.addSpacer(8);
+    // SEM lineLimit → wrap natural
   });
 
-  // Timeline
-  group.items.forEach(function (w, i) {
+  /* LEFT – timeline */
+  const items = [...group.items].sort((a, b) =>
+    String(a.start).localeCompare(String(b.start))
+  );
+
+  items.forEach((it, i) => {
     if (i > 0) left.addSpacer(6);
 
-    var row = left.addStack();
+    const row = left.addStack();
     row.centerAlignContent();
 
-    var dot = row.addText("●");
+    const dot = row.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
-    dot.textColor = levelColor(w.level);
+    dot.textColor = levelColor(it.level);
 
     row.addSpacer(8);
 
-    var time = row.addText(period(w.start, w.end));
+    const time = row.addText(formatPeriod(it.start, it.end));
     time.font = Font.systemFont(ui.timelineFont);
     time.textColor = new Color("#A6B0C3");
   });
 }
 
-/* ================= HELPERS ================= */
+/* ================= DATA ================= */
+
+function groupByType(warnings) {
+  const map = {};
+  warnings.forEach(w => {
+    if (!map[w.type]) map[w.type] = { type: w.type, items: [], maxLevel: "green" };
+    map[w.type].items.push(w);
+    if (priority(w.level) > priority(map[w.type].maxLevel)) {
+      map[w.type].maxLevel = w.level;
+    }
+  });
+  return Object.values(map);
+}
+
+function buildLevelSummaries(items) {
+  const map = {};
+  items.forEach(w => {
+    if (!map[w.level]) map[w.level] = w;
+  });
+  return Object.values(map);
+}
+
+/* ================= HEADER PILL ================= */
 
 function setTopPill(pill, text, count, level) {
   pill.backgroundColor = levelBg(level);
@@ -177,45 +226,79 @@ function setTopPill(pill, text, count, level) {
   text.text = count + " avisos";
 }
 
+/* ================= FOOTER ================= */
+
 function renderFooter(w) {
-  var f = w.addText("Atualizado " + new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }));
+  const f = w.addText(
+    "Atualizado " +
+    new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+  );
   f.font = Font.systemFont(10);
   f.textColor = new Color("#7E8AA6");
 }
 
-function groupByType(ws) {
-  var m = {};
-  ws.forEach(w => {
-    if (!m[w.type]) m[w.type] = { type: w.type, items: [], maxLevel: "green" };
-    m[w.type].items.push(w);
-    if (priority(w.level) > priority(m[w.type].maxLevel)) m[w.type].maxLevel = w.level;
-  });
-  return Object.values(m);
+/* ================= TIME ================= */
+
+function formatPeriod(startIso, endIso) {
+  const s = new Date(startIso);
+  const e = new Date(endIso);
+  return (
+    s.toLocaleDateString("pt-PT", { weekday: "short" }) +
+    " " +
+    s.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) +
+    "–" +
+    e.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+  );
 }
 
-function levelSummaries(items) {
-  var m = {};
-  items.forEach(w => {
-    if (!m[w.level]) m[w.level] = w;
-  });
-  return Object.values(m);
+/* ================= LEVELS ================= */
+
+function priority(l) {
+  return { green: 1, yellow: 2, orange: 3, red: 4 }[l] || 0;
 }
 
-function period(s, e) {
-  var sd = new Date(s), ed = new Date(e);
-  return sd.toLocaleDateString("pt-PT", { weekday: "short" }) +
-    " " + sd.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) +
-    "–" + ed.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+function getMaxLevel(ws) {
+  return ws.reduce(
+    (m, w) => (priority(w.level) > priority(m) ? w.level : m),
+    "green"
+  );
 }
 
-/* ================= COLORS ================= */
+function levelLabel(l) {
+  return { yellow: "Amarelo", orange: "Laranja", red: "Vermelho" }[l] || "Aviso";
+}
 
-function priority(l) { return { green: 1, yellow: 2, orange: 3, red: 4 }[l] || 0; }
-function getMaxLevel(ws) { return ws.reduce((m, w) => priority(w.level) > priority(m) ? w.level : m, "green"); }
-function levelLabel(l) { return { yellow: "Amarelo", orange: "Laranja", red: "Vermelho" }[l] || "Aviso"; }
-function levelColor(l) { return { yellow: "#FFE27A", orange: "#FFB86B", red: "#FF6B6B" }[l] ? new Color({ yellow: "#FFE27A", orange: "#FFB86B", red: "#FF6B6B" }[l]) : Color.gray(); }
-function levelBg(l) { return { yellow: "#3A3610", orange: "#3A2B10", red: "#3B1D1D" }[l] ? new Color({ yellow: "#3A3610", orange: "#3A2B10", red: "#3B1D1D" }[l]) : new Color("#15311F"); }
-function levelFg(l) { return { yellow: "#FFF0A6", orange: "#FFD7A1", red: "#FFB4B4" }[l] ? new Color({ yellow: "#FFF0A6", orange: "#FFD7A1", red: "#FFB4B4" }[l]) : Color.white(); }
+function levelColor(l) {
+  return new Color(
+    { yellow: "#FFE27A", orange: "#FFB86B", red: "#FF6B6B" }[l] || "#CCCCCC"
+  );
+}
+
+function levelBg(l) {
+  return new Color(
+    { yellow: "#3A3610", orange: "#3A2B10", red: "#3B1D1D" }[l] || "#15311F"
+  );
+}
+
+function levelFg(l) {
+  return new Color(
+    { yellow: "#FFF0A6", orange: "#FFD7A1", red: "#FFB4B4" }[l] || "#FFFFFF"
+  );
+}
+
+function iconForType(type) {
+  const t = type.toLowerCase();
+  if (t.includes("agitação") || t.includes("mar")) return "🌊";
+  if (t.includes("vento")) return "💨";
+  if (t.includes("precip") || t.includes("chuva")) return "🌧️";
+  if (t.includes("trovo")) return "⛈️";
+  if (t.includes("nevo")) return "🌫️";
+  if (t.includes("frio")) return "🥶";
+  if (t.includes("calor")) return "🥵";
+  return "⚠️";
+}
+
+/* ================= END ================= */
 
 function finish(w) {
   Script.setWidget(w);

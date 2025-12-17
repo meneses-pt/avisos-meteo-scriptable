@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.10";
+const SCRIPT_VERSION = "v1.0.11";
 
 async function main() {
   const AREA = "PTO";
@@ -308,13 +308,12 @@ function renderTypeCard(w, group, ui) {
     }
   }
   
-  // Força a coluna esquerda a ter largura mínima
   leftWrapper.addSpacer();
 
   // Espaço entre colunas
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas (wrapper para forçar wrap) =====
+  // ===== COLUNA DIREITA: Legendas =====
   const rightWrapper = content.addStack();
   rightWrapper.layoutVertically();
   
@@ -324,7 +323,6 @@ function renderTypeCard(w, group, ui) {
   for (let i = 0; i < summaries.length; i++) {
     if (i > 0) rightWrapper.addSpacer(10);
 
-    // Stack para cada legenda
     const legendStack = rightWrapper.addStack();
     legendStack.layoutVertically();
     
@@ -334,21 +332,18 @@ function renderTypeCard(w, group, ui) {
 
     legendStack.addSpacer(4);
 
-    // ✅ WRAP MANUAL: dividir texto em linhas
+    // ✅ USAR UM ÚNICO addText() com \n para quebras de linha
     const fullText = summaries[i].text || "";
     const lines = wrapText(fullText, ui.descMaxChars);
+    const joinedText = lines.join('\n'); // ← JUNTAR com quebra de linha
     
-    for (let j = 0; j < lines.length; j++) {
-      if (j > 0) legendStack.addSpacer(1);
-      
-      const txt = legendStack.addText(lines[j]);
-      txt.font = Font.systemFont(ui.descFont);
-      txt.textColor = new Color("#D5DBE7");
-      // ✅ CRÍTICO: não definir lineLimit OU definir como null
-    }
+    const txt = legendStack.addText(joinedText);
+    txt.font = Font.systemFont(ui.descFont);
+    txt.textColor = new Color("#D5DBE7");
+    // ✅ CRÍTICO: definir lineLimit baseado no número de linhas
+    txt.lineLimit = lines.length;
   }
   
-  // Força a coluna direita a expandir
   rightWrapper.addSpacer();
 }
 

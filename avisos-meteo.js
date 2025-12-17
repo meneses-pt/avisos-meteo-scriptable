@@ -387,5 +387,3 @@ function finish(w) {
   Script.setWidget(w);
   Script.complete();
 }
-
-await main();

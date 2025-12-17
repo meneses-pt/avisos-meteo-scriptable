@@ -1,5 +1,5 @@
 // Avisos Meteo – Widget iOS (Scriptable)
-// UI moderna + agrupamento por tipo + agrupamento por (nível + descrição) com múltiplos intervalos
+// Compacto por tipo: níveis únicos + descrição (a mais cedo por nível) + timeline com bolinhas
 // Endpoint: https://avisos-meteo.andremeneses.workers.dev/?area=PTO
 
 function runWidget() {
@@ -14,27 +14,25 @@ function runWidget() {
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=PTO";
 
-  // ===== Header (desenhada para NÃO cortar no medium) =====
-  // Linha 1: título (esquerda) + pill (direita) com texto curto no medium
-  var header1 = w.addStack();
-  header1.centerAlignContent();
+  // Header (compacto e seguro no medium)
+  var header = w.addStack();
+  header.centerAlignContent();
 
-  var title = header1.addText("Avisos IPMA");
+  var title = header.addText("Avisos IPMA");
   title.font = Font.boldSystemFont(ui.titleFont);
   title.textColor = new Color("#FFFFFF");
   title.lineLimit = 1;
   if (title.minimumScaleFactor !== undefined) title.minimumScaleFactor = 0.65;
 
-  header1.addSpacer();
+  header.addSpacer();
 
-  var statusPill = header1.addStack();
+  var statusPill = header.addStack();
   statusPill.setPadding(4, 8, 4, 8);
   statusPill.cornerRadius = 10;
 
   var statusText = statusPill.addText("…");
   statusText.font = Font.boldSystemFont(ui.pillFont);
 
-  // Linha 2: subtitle (se houver espaço)
   if (ui.showSubtitle) {
     w.addSpacer(2);
     var subtitle = w.addText(ui.subtitleText);
@@ -59,14 +57,14 @@ function runWidget() {
 
       if (!warnings.length) {
         renderEmptyState(w, ui);
-        w.addSpacer(); // empurra footer para baixo
+        w.addSpacer();
         renderFooter(w);
         finish(w);
         return;
       }
 
-      // Agrupar por tipo, e dentro do tipo agrupar por (level + description)
-      var groups = groupByTypeSequential(warnings);
+      // Agrupar por tipo
+      var groups = groupByType(warnings);
 
       // Ordenar tipos por gravidade máxima
       groups.sort(function (a, b) {
@@ -76,23 +74,21 @@ function runWidget() {
         return a.type.localeCompare(b.type);
       });
 
-      // Quantos tipos/blocos mostramos por tamanho
-      var maxTypes = ui.maxTypes;
-      var maxBlocksPerType = ui.maxBlocksPerType;
-      var shownTypes = Math.min(groups.length, maxTypes);
+      // Render: por tamanho
+      var shownTypes = Math.min(groups.length, ui.maxTypes);
 
       for (var gi = 0; gi < shownTypes; gi++) {
         if (gi > 0) w.addSpacer(ui.betweenCardsSpace);
-        renderTypeCard(w, groups[gi], ui, maxBlocksPerType);
+        renderTypeCompact(w, groups[gi], ui);
       }
 
-      // Resumo do que ficou fora (tipos escondidos)
+      // Se houver mais tipos, resumo
       if (groups.length > shownTypes) {
         w.addSpacer(ui.betweenCardsSpace);
         renderHiddenTypesSummary(w, groups, shownTypes);
       }
 
-      w.addSpacer(); // footer em baixo
+      w.addSpacer();
       renderFooter(w);
 
       w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
@@ -120,10 +116,9 @@ function runWidget() {
     });
 }
 
-// ===== UI Tuning =====
+// ---------------- UI ----------------
 
 function uiForFamily(fam) {
-  // iOS: small / medium / large
   if (fam === "small") {
     return {
       pad: 10,
@@ -136,15 +131,14 @@ function uiForFamily(fam) {
       afterHeaderSpace: 8,
       betweenCardsSpace: 8,
       maxTypes: 1,
-      maxBlocksPerType: 3,
+      maxTimelineRowsPerType: 5,
       cardTitleFont: 12,
-      timeFont: 10,
+      chipFont: 10,
       descFont: 10,
+      timelineFont: 10,
       showDescriptions: false,
-      showExtraIntervals: false,
     };
   }
-
   if (fam === "large") {
     return {
       pad: 14,
@@ -153,20 +147,19 @@ function uiForFamily(fam) {
       pillFont: 11,
       bodyFont: 13,
       showSubtitle: true,
-      subtitleText: "Porto · Próximos avisos",
+      subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 10,
       betweenCardsSpace: 10,
       maxTypes: 3,
-      maxBlocksPerType: 6,
+      maxTimelineRowsPerType: 10,
       cardTitleFont: 13,
-      timeFont: 11,
+      chipFont: 11,
       descFont: 10,
+      timelineFont: 11,
       showDescriptions: true,
-      showExtraIntervals: true,
     };
   }
-
-  // medium (o “segundo maior”) – super compacto para não cortar
+  // medium: muito compacto para não cortar e mostrar info útil
   return {
     pad: 10,
     titleFont: 14,
@@ -177,17 +170,15 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 8,
     betweenCardsSpace: 9,
-    maxTypes: 1,          // medium: 1 tipo com mais detalhe costuma ser melhor
-    maxBlocksPerType: 4,
+    maxTypes: 1,              // medium: 1 tipo com bom detalhe
+    maxTimelineRowsPerType: 8,
     cardTitleFont: 12,
-    timeFont: 10,
+    chipFont: 10,
     descFont: 10,
-    showDescriptions: false,
-    showExtraIntervals: false,
+    timelineFont: 10,
+    showDescriptions: true,   // mas curto (1 linha por nível)
   };
 }
-
-// ===== Rendering =====
 
 function renderEmptyState(w, ui) {
   var box = w.addStack();
@@ -232,116 +223,6 @@ function renderFooter(w) {
   hint.textColor = new Color("#7E8AA6");
 }
 
-function renderTypeCard(w, group, ui, maxBlocksPerType) {
-  var card = w.addStack();
-  card.layoutVertically();
-  card.setPadding(12, 12, 12, 12);
-  card.cornerRadius = 16;
-  card.backgroundColor = new Color("#111B2E");
-
-  // Header do tipo
-  var top = card.addStack();
-  top.centerAlignContent();
-
-  var icon = top.addText(iconForType(group.type));
-  icon.font = Font.systemFont(14);
-
-  top.addSpacer(6);
-
-  var name = top.addText(group.type);
-  name.font = Font.boldSystemFont(ui.cardTitleFont);
-  name.textColor = new Color("#FFFFFF");
-  name.lineLimit = 1;
-  if (name.minimumScaleFactor !== undefined) name.minimumScaleFactor = 0.75;
-
-  top.addSpacer();
-
-  var chip = top.addStack();
-  chip.setPadding(3, 8, 3, 8);
-  chip.cornerRadius = 10;
-
-  var chipStyle = colorsForLevel(group.maxLevel);
-  chip.backgroundColor = chipStyle.bg;
-
-  var chipText = chip.addText(levelLabel(group.maxLevel));
-  chipText.font = Font.boldSystemFont(ui.pillFont);
-  chipText.textColor = chipStyle.fg;
-
-  card.addSpacer(8);
-
-  // Blocos (cada bloco = mesma gravidade + mesma descrição, com vários intervalos)
-  var blocks = group.blocks;
-  // ordenar blocos por “primeiro start”
-  blocks.sort(function (a, b) {
-    return String(a.intervals[0].start || "").localeCompare(String(b.intervals[0].start || ""));
-  });
-
-  var shown = Math.min(blocks.length, maxBlocksPerType);
-  for (var i = 0; i < shown; i++) {
-    if (i > 0) card.addSpacer(8);
-    renderBlockWithIntervals(card, blocks[i], ui);
-  }
-
-  if (blocks.length > shown) {
-    var more = card.addText("+" + (blocks.length - shown) + " blocos");
-    more.font = Font.systemFont(10);
-    more.textColor = new Color("#7E8AA6");
-  }
-}
-
-function renderBlockWithIntervals(parent, block, ui) {
-  // Linha 1: “Resumo” do bloco: nível + (opcional) 1a linha de descrição em large
-  var row = parent.addStack();
-  row.centerAlignContent();
-
-  var lvl = (block.level || "").toLowerCase();
-  var pill = row.addStack();
-  pill.setPadding(2, 7, 2, 7);
-  pill.cornerRadius = 10;
-
-  var style = colorsForLevel(lvl);
-  pill.backgroundColor = style.bg;
-
-  var txt = pill.addText(levelLabel(lvl));
-  txt.font = Font.boldSystemFont(10);
-  txt.textColor = style.fg;
-
-  row.addSpacer(8);
-
-  var label = row.addText("Intervalos");
-  label.font = Font.systemFont(10);
-  label.textColor = new Color("#7E8AA6");
-
-  // Intervalos (lista)
-  var intervals = block.intervals;
-  var maxIntervalsToShow = ui.showExtraIntervals ? 4 : 4; // igual, mas no large mostramos também descrição
-  var shown = Math.min(intervals.length, maxIntervalsToShow);
-
-  for (var i = 0; i < shown; i++) {
-    var itv = intervals[i];
-    var line = parent.addText(shortPeriod(itv.start, itv.end));
-    line.font = Font.systemFont(ui.timeFont);
-    line.textColor = new Color("#A6B0C3");
-    line.lineLimit = 1;
-    if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.7;
-  }
-
-  if (intervals.length > shown) {
-    var more = parent.addText("+" + (intervals.length - shown) + " intervalos");
-    more.font = Font.systemFont(10);
-    more.textColor = new Color("#7E8AA6");
-  }
-
-  // Descrição só em large (para não “rebentar” medium)
-  if (ui.showDescriptions && block.text) {
-    parent.addSpacer(4);
-    var d = parent.addText(block.text);
-    d.font = Font.systemFont(ui.descFont);
-    d.textColor = new Color("#D5DBE7");
-    d.lineLimit = 2;
-  }
-}
-
 function renderHiddenTypesSummary(w, groups, startIdx) {
   var box = w.addStack();
   box.layoutVertically();
@@ -358,7 +239,7 @@ function renderHiddenTypesSummary(w, groups, startIdx) {
   var line = "";
   for (var j = startIdx; j < groups.length; j++) {
     if (line.length > 0) line += " · ";
-    line += groups[j].type + " (" + groups[j].originalCount + ")";
+    line += groups[j].type + " (" + groups[j].items.length + ")";
   }
 
   var more = box.addText(line);
@@ -367,87 +248,228 @@ function renderHiddenTypesSummary(w, groups, startIdx) {
   more.lineLimit = 2;
 }
 
-// ===== Grouping logic =====
+// ------------- CORE RENDER (o que pediste) -------------
 
-function groupByTypeSequential(warnings) {
-  // type -> { type, originalCount, maxLevel, blocks[] }
+function renderTypeCompact(w, group, ui) {
+  var card = w.addStack();
+  card.layoutVertically();
+  card.setPadding(12, 12, 12, 12);
+  card.cornerRadius = 16;
+  card.backgroundColor = new Color("#111B2E");
+
+  // Top row: icon + type + max chip
+  var top = card.addStack();
+  top.centerAlignContent();
+
+  var icon = top.addText(iconForType(group.type));
+  icon.font = Font.systemFont(14);
+
+  top.addSpacer(6);
+
+  var name = top.addText(group.type);
+  name.font = Font.boldSystemFont(ui.cardTitleFont);
+  name.textColor = new Color("#FFFFFF");
+  name.lineLimit = 1;
+  if (name.minimumScaleFactor !== undefined) name.minimumScaleFactor = 0.75;
+
+  top.addSpacer();
+
+  var maxChip = makeChip(top, group.maxLevel, ui);
+
+  card.addSpacer(8);
+
+  // 1) Níveis únicos + descrição “a mais cedo por nível”
+  var levelSummaries = buildLevelSummaries(group.items); // [{level, text, firstStart}]
+  // Ordenar por gravidade desc, depois por firstStart asc
+  levelSummaries.sort(function (a, b) {
+    var pa = priority(String(a.level || "").toLowerCase());
+    var pb = priority(String(b.level || "").toLowerCase());
+    if (pb !== pa) return pb - pa;
+    return String(a.firstStart || "").localeCompare(String(b.firstStart || ""));
+  });
+
+  // Linha de chips (níveis únicos)
+  var chipsRow = card.addStack();
+  chipsRow.centerAlignContent();
+
+  for (var i = 0; i < levelSummaries.length; i++) {
+    if (i > 0) chipsRow.addSpacer(6);
+    makeSmallChip(chipsRow, levelSummaries[i].level, ui);
+  }
+
+  // Descrições (uma por nível). No medium/large: sim (curtas). No small: não.
+  if (ui.showDescriptions) {
+    card.addSpacer(6);
+    for (var d = 0; d < levelSummaries.length; d++) {
+      var txt = levelSummaries[d].text ? levelSummaries[d].text : "";
+      if (!txt) continue;
+
+      var line = card.addText(levelLabel(String(levelSummaries[d].level || "").toLowerCase()) + ": " + txt);
+      line.font = Font.systemFont(ui.descFont);
+      line.textColor = new Color("#D5DBE7");
+      line.lineLimit = 1; // curto para não rebentar layout
+      if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.6;
+    }
+  }
+
+  card.addSpacer(10);
+
+  // 2) Timeline: intervalos em ordem, com bolinhas coloridas do nível
+  // Ordenar avisos por start
+  var items = group.items.slice(0);
+  items.sort(function (a, b) {
+    return String(a.start || "").localeCompare(String(b.start || ""));
+  });
+
+  var maxRows = ui.maxTimelineRowsPerType;
+  var shown = Math.min(items.length, maxRows);
+
+  for (var t = 0; t < shown; t++) {
+    renderTimelineRow(card, items[t], ui);
+    if (t < shown - 1) card.addSpacer(5);
+  }
+
+  if (items.length > shown) {
+    card.addSpacer(6);
+    var more = card.addText("+" + (items.length - shown) + " intervalos");
+    more.font = Font.systemFont(10);
+    more.textColor = new Color("#7E8AA6");
+  }
+}
+
+function renderTimelineRow(parent, warn, ui) {
+  var row = parent.addStack();
+  row.centerAlignContent();
+
+  // Dot (●) colorido por nível
+  var lvl = String(warn.level || "").toLowerCase();
+  var dot = row.addText("●");
+  dot.font = Font.boldSystemFont(ui.timelineFont + 2);
+  dot.textColor = dotColor(lvl);
+
+  row.addSpacer(8);
+
+  // Intervalo compacto
+  var time = row.addText(timelinePeriod(warn.start, warn.end));
+  time.font = Font.systemFont(ui.timelineFont);
+  time.textColor = new Color("#A6B0C3");
+  time.lineLimit = 1;
+  if (time.minimumScaleFactor !== undefined) time.minimumScaleFactor = 0.6;
+
+  row.addSpacer();
+
+  // Mini chip com nível (para leitura rápida)
+  makeTinyChip(row, lvl, ui);
+}
+
+// --------- Data shaping ---------
+
+function groupByType(warnings) {
   var map = {};
-
   for (var i = 0; i < warnings.length; i++) {
     var w = warnings[i];
     var type = w.type || "Aviso";
 
     if (!map[type]) {
-      map[type] = {
-        type: type,
-        originalCount: 0,
-        maxLevel: "green",
-        blocks: []
-      };
+      map[type] = { type: type, items: [], maxLevel: "green" };
     }
-
-    map[type].originalCount += 1;
+    map[type].items.push(w);
 
     var lvl = String(w.level || "").toLowerCase();
-    if (priority(lvl) > priority(map[type].maxLevel)) {
-      map[type].maxLevel = lvl;
-    }
-
-    map[type].blocks.push({
-      level: w.level,
-      text: w.text,
-      start: w.start,
-      end: w.end
-    });
+    if (priority(lvl) > priority(map[type].maxLevel)) map[type].maxLevel = lvl;
   }
 
-  // Agora, para cada tipo, ordenar e AGRUPAR SEQUENCIALMENTE
   var out = [];
-
   for (var k in map) {
     if (!map.hasOwnProperty(k)) continue;
-
-    var items = map[k].blocks;
-
-    // ordenar por start
-    items.sort(function (a, b) {
-      return String(a.start || "").localeCompare(String(b.start || ""));
-    });
-
-    var merged = [];
-    for (var j = 0; j < items.length; j++) {
-      var cur = items[j];
-      var last = merged.length ? merged[merged.length - 1] : null;
-
-      if (
-        last &&
-        String(last.level) === String(cur.level) &&
-        normText(last.text) === normText(cur.text)
-      ) {
-        // mesmo bloco → adiciona intervalo
-        last.intervals.push({ start: cur.start, end: cur.end });
-      } else {
-        // novo bloco
-        merged.push({
-          level: cur.level,
-          text: cur.text,
-          intervals: [{ start: cur.start, end: cur.end }]
-        });
-      }
-    }
-
-    out.push({
-      type: map[k].type,
-      originalCount: map[k].originalCount,
-      maxLevel: map[k].maxLevel,
-      blocks: merged
-    });
+    out.push(map[k]);
   }
-
   return out;
 }
 
-// ===== Status pill =====
+// “níveis únicos” + descrição (para cada nível escolhe a descrição do aviso que começa mais cedo)
+function buildLevelSummaries(items) {
+  var byLevel = {}; // level -> {level, text, firstStart}
+  for (var i = 0; i < items.length; i++) {
+    var w = items[i];
+    var lvl = String(w.level || "").toLowerCase();
+    if (lvl === "green") continue; // se quiseres incluir verde, tira isto
+
+    var start = String(w.start || "");
+    var txt = normText(w.text);
+
+    if (!byLevel[lvl]) {
+      byLevel[lvl] = { level: lvl, text: txt, firstStart: start };
+    } else {
+      // se este começa mais cedo, trocar a descrição
+      if (start && byLevel[lvl].firstStart && start.localeCompare(byLevel[lvl].firstStart) < 0) {
+        byLevel[lvl].firstStart = start;
+        byLevel[lvl].text = txt;
+      }
+      // se ainda não tinha texto e este tem, usar
+      if (!byLevel[lvl].text && txt) byLevel[lvl].text = txt;
+    }
+  }
+
+  var out = [];
+  for (var k in byLevel) {
+    if (!byLevel.hasOwnProperty(k)) continue;
+    out.push(byLevel[k]);
+  }
+  return out;
+}
+
+// --------- Chips ---------
+
+function makeChip(stack, level, ui) {
+  var chip = stack.addStack();
+  chip.setPadding(3, 8, 3, 8);
+  chip.cornerRadius = 10;
+
+  var style = colorsForLevel(String(level || "").toLowerCase());
+  chip.backgroundColor = style.bg;
+
+  var t = chip.addText(levelLabel(String(level || "").toLowerCase()));
+  t.font = Font.boldSystemFont(ui.pillFont);
+  t.textColor = style.fg;
+  return chip;
+}
+
+function makeSmallChip(stack, level, ui) {
+  var chip = stack.addStack();
+  chip.setPadding(2, 7, 2, 7);
+  chip.cornerRadius = 10;
+
+  var style = colorsForLevel(String(level || "").toLowerCase());
+  chip.backgroundColor = style.bg;
+
+  var t = chip.addText(levelLabel(String(level || "").toLowerCase()));
+  t.font = Font.boldSystemFont(ui.chipFont);
+  t.textColor = style.fg;
+}
+
+function makeTinyChip(stack, level, ui) {
+  var chip = stack.addStack();
+  chip.setPadding(2, 6, 2, 6);
+  chip.cornerRadius = 10;
+
+  var style = colorsForLevel(String(level || "").toLowerCase());
+  chip.backgroundColor = style.bg;
+
+  var t = chip.addText(levelShort(String(level || "").toLowerCase()));
+  t.font = Font.boldSystemFont(9);
+  t.textColor = style.fg;
+}
+
+function levelShort(level) {
+  if (level === "red") return "V";
+  if (level === "orange") return "L";
+  if (level === "yellow") return "A";
+  if (level === "green") return "Vd";
+  return "!";
+}
+
+// --------- Status pill ---------
 
 function applyStatusPill(pill, textNode, maxLevel, originalCount, ui) {
   if (!originalCount) {
@@ -457,66 +479,56 @@ function applyStatusPill(pill, textNode, maxLevel, originalCount, ui) {
     return;
   }
 
-  var style = colorsForLevel(maxLevel);
+  var style = colorsForLevel(String(maxLevel || "").toLowerCase());
   pill.backgroundColor = style.bg;
   textNode.textColor = style.fg;
 
-  // No medium usamos texto mais curto para não cortar
-  if (ui && ui.maxTypes === 1 && ui.titleFont <= 14) {
-    textNode.text = originalCount + " (máx. " + levelLabel(maxLevel) + ")";
+  // medium: texto curto para não cortar
+  if (ui && ui.titleFont <= 14) {
+    textNode.text = originalCount + " (máx. " + levelLabel(String(maxLevel || "").toLowerCase()) + ")";
   } else {
-    textNode.text = originalCount + " avisos (máx. " + levelLabel(maxLevel) + ")";
+    textNode.text = originalCount + " avisos (máx. " + levelLabel(String(maxLevel || "").toLowerCase()) + ")";
   }
 }
 
-function getMaxLevelFromWarnings(warnings) {
-  var max = "green";
-  for (var i = 0; i < warnings.length; i++) {
-    var lvl = (warnings[i].level || "").toLowerCase();
-    if (priority(lvl) > priority(max)) max = lvl;
+// --------- Time formatting ---------
+
+function timelinePeriod(startIso, endIso) {
+  // compacto mas com dia quando muda
+  var s = new Date(startIso);
+  var e = new Date(endIso);
+
+  // se falhar parse, fallback simples
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return shortPeriod(startIso, endIso);
+
+  var sameDay = s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate();
+
+  var sH = hhmm(s);
+  var eH = hhmm(e);
+
+  if (sameDay) {
+    // "ter 12:37 → 03:00" (sem repetir o dia)
+    return dowShort(s) + " " + sH + " → " + eH;
   }
-  return max;
+
+  // "ter 12:37 → qua 03:00"
+  return dowShort(s) + " " + sH + " → " + dowShort(e) + " " + eH;
 }
 
-// ===== Utils =====
-
-function normText(s) {
-  return String(s || "").replace(/\s+/g, " ").trim();
+function hhmm(d) {
+  try {
+    return d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "";
+  }
 }
 
-function priority(level) {
-  if (level === "red") return 4;
-  if (level === "orange") return 3;
-  if (level === "yellow") return 2;
-  if (level === "green") return 1;
-  return 0;
-}
-
-function colorsForLevel(level) {
-  if (level === "red") return { bg: new Color("#3B1D1D"), fg: new Color("#FFB4B4") };
-  if (level === "orange") return { bg: new Color("#3A2B10"), fg: new Color("#FFD7A1") };
-  if (level === "yellow") return { bg: new Color("#3A3610"), fg: new Color("#FFF0A6") };
-  return { bg: new Color("#15311F"), fg: new Color("#9AF0B5") };
-}
-
-function levelLabel(level) {
-  if (level === "red") return "Vermelho";
-  if (level === "orange") return "Laranja";
-  if (level === "yellow") return "Amarelo";
-  if (level === "green") return "Verde";
-  return "Aviso";
-}
-
-function iconForType(type) {
-  var t = (type || "").toLowerCase();
-  if (t.indexOf("agitação") >= 0 || t.indexOf("mar") >= 0) return "🌊";
-  if (t.indexOf("vento") >= 0) return "💨";
-  if (t.indexOf("precip") >= 0 || t.indexOf("chuva") >= 0) return "🌧️";
-  if (t.indexOf("trovo") >= 0) return "⛈️";
-  if (t.indexOf("nevo") >= 0) return "🌫️";
-  if (t.indexOf("frio") >= 0) return "🥶";
-  if (t.indexOf("quente") >= 0 || t.indexOf("calor") >= 0) return "🥵";
-  return "⚠️";
+function dowShort(d) {
+  try {
+    return d.toLocaleDateString("pt-PT", { weekday: "short" });
+  } catch (e) {
+    return "";
+  }
 }
 
 function shortPeriod(startIso, endIso) {
@@ -525,7 +537,7 @@ function shortPeriod(startIso, endIso) {
 
 function shortDate(iso) {
   try {
-    var d = new Date(iso); // converte para timezone do iPhone automaticamente
+    var d = new Date(iso); // ajusta ao timezone do iPhone
     return d.toLocaleString("pt-PT", {
       weekday: "short",
       day: "2-digit",
@@ -543,6 +555,64 @@ function fmtTime(d) {
   } catch (e) {
     return "";
   }
+}
+
+// --------- Levels / colors / icons ---------
+
+function getMaxLevelFromWarnings(warnings) {
+  var max = "green";
+  for (var i = 0; i < warnings.length; i++) {
+    var lvl = String(warnings[i].level || "").toLowerCase();
+    if (priority(lvl) > priority(max)) max = lvl;
+  }
+  return max;
+}
+
+function priority(level) {
+  if (level === "red") return 4;
+  if (level === "orange") return 3;
+  if (level === "yellow") return 2;
+  if (level === "green") return 1;
+  return 0;
+}
+
+function colorsForLevel(level) {
+  if (level === "red") return { bg: new Color("#3B1D1D"), fg: new Color("#FFB4B4") };
+  if (level === "orange") return { bg: new Color("#3A2B10"), fg: new Color("#FFD7A1") };
+  if (level === "yellow") return { bg: new Color("#3A3610"), fg: new Color("#FFF0A6") };
+  return { bg: new Color("#15311F"), fg: new Color("#9AF0B5") };
+}
+
+function dotColor(level) {
+  // dot mais “vivo” para leitura rápida
+  if (level === "red") return new Color("#FF6B6B");
+  if (level === "orange") return new Color("#FFB86B");
+  if (level === "yellow") return new Color("#FFE27A");
+  return new Color("#8EF0B2");
+}
+
+function levelLabel(level) {
+  if (level === "red") return "Vermelho";
+  if (level === "orange") return "Laranja";
+  if (level === "yellow") return "Amarelo";
+  if (level === "green") return "Verde";
+  return "Aviso";
+}
+
+function iconForType(type) {
+  var t = String(type || "").toLowerCase();
+  if (t.indexOf("agitação") >= 0 || t.indexOf("mar") >= 0) return "🌊";
+  if (t.indexOf("vento") >= 0) return "💨";
+  if (t.indexOf("precip") >= 0 || t.indexOf("chuva") >= 0) return "🌧️";
+  if (t.indexOf("trovo") >= 0) return "⚡";
+  if (t.indexOf("nevo") >= 0) return "🌫️";
+  if (t.indexOf("frio") >= 0) return "🥶";
+  if (t.indexOf("quente") >= 0 || t.indexOf("calor") >= 0) return "🥵";
+  return "⚠️";
+}
+
+function normText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
 }
 
 function finish(w) {

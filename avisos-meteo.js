@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.23";
+const SCRIPT_VERSION = "v1.0.24";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -42,7 +42,6 @@ async function main() {
   title.font = Font.boldSystemFont(ui.titleFont);
   title.textColor = Color.white();
   title.lineLimit = 1;
-  title.minimumScaleFactor = 0.7;
 
   header.addSpacer();
 
@@ -100,8 +99,29 @@ async function main() {
   }
 
   const groups = groupByType(warnings);
-  groups.sort((a, b) => priorityDesc(b.maxLevel) - priorityDesc(a.maxLevel));
-
+  // ✅ Ordena pela data do primeiro evento de cada tipo
+  groups.sort((a, b) => {
+    const aFirst = a.items.reduce((earliest, item) => {
+      const startMs = safeMs(item.start);
+      return (startMs !== null && (earliest === null || startMs < earliest)) ? startMs : earliest;
+    }, null);
+    
+    const bFirst = b.items.reduce((earliest, item) => {
+      const startMs = safeMs(item.start);
+      return (startMs !== null && (earliest === null || startMs < earliest)) ? startMs : earliest;
+    }, null);
+    
+    // Se ambos têm data, ordena por data
+    if (aFirst !== null && bFirst !== null) return aFirst - bFirst;
+    
+    // Se só um tem data, esse vem primeiro
+    if (aFirst !== null) return -1;
+    if (bFirst !== null) return 1;
+    
+    // Se nenhum tem data, mantém ordem original
+    return 0;
+  });
+  
   for (let i = 0; i < groups.length; i++) {
     if (i > 0) w.addSpacer(10);
     renderTypeCard(w, groups[i], ui);
@@ -334,7 +354,6 @@ function renderTypeCard(w, group, ui) {
   name.font = Font.boldSystemFont(ui.cardTitleFont);
   name.textColor = Color.white();
   name.lineLimit = 1;
-  name.minimumScaleFactor = 0.75;
 
   card.addSpacer(10);
 

@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
 
-const SCRIPT_VERSION = "v1.0.2"; // ← INCREMENTA isto a cada mudança
+const SCRIPT_VERSION = "v1.0.3"; // ← INCREMENTA isto a cada mudança
 
 async function main() {
   const AREA = "PTO";
@@ -119,7 +119,7 @@ async function main() {
 function uiForFamily(fam) {
   if (fam === "large") {
     return {
-      pad: 14,
+      pad: 16,
       titleFont: 16,
       subtitleFont: 11,
       pillFont: 12,
@@ -193,6 +193,32 @@ function uiForFamily(fam) {
     dotGap: 6,
     indent: 18,
   };
+}
+
+/* ================= TEXT WRAP ================= */
+
+function wrapText(text, maxWidth, font) {
+  // Se o texto for curto, retorna direto
+  if (text.length < maxWidth) return text;
+  
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    
+    // Estimativa: ~6 pixels por caractere em fonte 12
+    if (testLine.length * 6 > maxWidth * 10) {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  if (currentLine) lines.push(currentLine);
+  return lines.join('\n');
 }
 
 /* ================= RENDER ================= */
@@ -275,23 +301,15 @@ function renderTypeCard(w, group, ui) {
   for (let i = 0; i < summaries.length; i++) {
     if (i > 0) right.addSpacer(8);
 
-    // ✅ WRAPPER com largura fixa para o nível
-    const lvlWrapper = right.addStack();
-    lvlWrapper.layoutVertically();
-    lvlWrapper.size = new Size(ui.rightColWidth, 0);
-    
-    const lvl = lvlWrapper.addText(levelLabel(summaries[i].level).toUpperCase());
-    lvl.font = Font.boldSystemFont(ui.levelFont);
-    lvl.textColor = levelColor(summaries[i].level);
-
-    right.addSpacer(3);
-
     // ✅ WRAPPER com largura fixa para a descrição
     const txtWrapper = right.addStack();
     txtWrapper.layoutVertically();
     txtWrapper.size = new Size(ui.rightColWidth, 0);
     
-    const txt = txtWrapper.addText(summaries[i].text || "");
+    // ✅ FORÇAR quebra manual
+    const wrappedText = wrapText(summaries[i].text || "", ui.rightColWidth, ui.descFont);
+    
+    const txt = txtWrapper.addText(wrappedText);
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
   }

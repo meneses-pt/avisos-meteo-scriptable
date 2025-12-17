@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.19";
+const SCRIPT_VERSION = "v1.0.20";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -243,9 +243,30 @@ function wrapText(text, maxChars) {
 
 // ===== FUNÇÃO PARA CALCULAR LARGURA APROXIMADA DO TEXTO =====
 function estimateTextWidth(text, fontSize) {
-  // Mais conservador - quebra ANTES para garantir que cabe
-  const avgCharWidth = fontSize * 0.6; // aumentei de 0.5 para 0.6
-  return text.length * avgCharWidth;
+  let totalWidth = 0;
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    
+    // Caracteres largos (maiúsculas, números, alguns símbolos)
+    if (/[A-Z0-9MWÕÃ]/.test(char)) {
+      totalWidth += fontSize * 0.65;
+    }
+    // Caracteres estreitos (i, l, pontuação)
+    else if (/[il\.,:;!']/.test(char)) {
+      totalWidth += fontSize * 0.30;
+    }
+    // Espaços
+    else if (char === ' ') {
+      totalWidth += fontSize * 0.35;
+    }
+    // Caracteres normais (minúsculas, acentos)
+    else {
+      totalWidth += fontSize * 0.52;
+    }
+  }
+  
+  return totalWidth;
 }
 
 function wrapTextToWidth(text, maxWidth, fontSize) {
@@ -264,7 +285,7 @@ function wrapTextToWidth(text, maxWidth, fontSize) {
     const testLine = currentLine ? currentLine + ' ' + word : word;
     const estimatedWidth = estimateTextWidth(testLine, fontSize);
     
-    console.log("Testando: '" + testLine + "' → width: " + estimatedWidth);
+    console.log("Testando: '" + testLine + "' → width: " + estimatedWidth.toFixed(1));
     
     if (estimatedWidth > maxWidth && currentLine) {
       console.log("QUEBRA! Linha completa: '" + currentLine + "'");
@@ -282,7 +303,6 @@ function wrapTextToWidth(text, maxWidth, fontSize) {
   
   console.log("Total de linhas: " + lines.length);
   console.log("Resultado: " + JSON.stringify(lines));
-  console.log("Joined com \\n: " + lines.join('\n'));
   
   return lines.length > 0 ? lines : [""];
 }

@@ -202,7 +202,7 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // ✅ LAYOUT HORIZONTAL (2 colunas)
+  // LAYOUT HORIZONTAL (2 colunas)
   const content = card.addStack();
   content.layoutHorizontally();
   content.spacing = ui.colGap;
@@ -247,8 +247,6 @@ function renderTypeCard(w, group, ui) {
   // ===== COLUNA DIREITA: Legendas =====
   const right = content.addStack();
   right.layoutVertically();
-  // ✅ FORÇAR largura máxima para a coluna direita
-  right.size = new Size(ui.rightColWidth, 0);
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -256,16 +254,25 @@ function renderTypeCard(w, group, ui) {
   for (let i = 0; i < summaries.length; i++) {
     if (i > 0) right.addSpacer(8);
 
-    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
+    // ✅ WRAPPER com largura fixa para o nível
+    const lvlWrapper = right.addStack();
+    lvlWrapper.layoutVertically();
+    lvlWrapper.size = new Size(ui.rightColWidth, 0);
+    
+    const lvl = lvlWrapper.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
 
     right.addSpacer(3);
 
-    const txt = right.addText(summaries[i].text || "");
+    // ✅ WRAPPER com largura fixa para a descrição
+    const txtWrapper = right.addStack();
+    txtWrapper.layoutVertically();
+    txtWrapper.size = new Size(ui.rightColWidth, 0);
+    
+    const txt = txtWrapper.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // ✅ SEM lineLimit - deixa wrap natural dentro da largura definida
   }
 }
 

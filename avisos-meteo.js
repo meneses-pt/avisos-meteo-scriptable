@@ -109,8 +109,8 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
-      leftColWidth: 140,    // ← NOVO
-      colGap: 12,           // ← NOVO
+      leftColWidth: 140,
+      colGap: 12,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
@@ -134,8 +134,8 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
-      leftColWidth: 100,    // ← NOVO
-      colGap: 8,            // ← NOVO
+      leftColWidth: 100,
+      colGap: 8,
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
@@ -159,8 +159,8 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
-    leftColWidth: 120,    // ← NOVO
-    colGap: 10,           // ← NOVO
+    leftColWidth: 120,
+    colGap: 10,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
@@ -198,7 +198,7 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // ✅ LAYOUT HORIZONTAL COM LARGURAS FIXAS
+  // LAYOUT HORIZONTAL COM LARGURAS FIXAS
   const content = card.addStack();
   content.layoutHorizontally();
   content.topAlignContent();
@@ -265,7 +265,7 @@ function renderTypeCard(w, group, ui) {
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    txt.lineLimit = 0; // ✅ wrap ativado
+    txt.lineLimit = 0;
   }
 }
 

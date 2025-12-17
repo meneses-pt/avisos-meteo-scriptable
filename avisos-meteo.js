@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.9";
+const SCRIPT_VERSION = "v1.0.10";
 
 async function main() {
   const AREA = "PTO";
@@ -201,13 +201,27 @@ function uiForFamily(fam) {
 /* ================= TEXT WRAP ================= */
 
 function wrapText(text, maxChars) {
-  if (!text || text.length <= maxChars) return [text];
+  if (!text) return [""];
+  if (text.length <= maxChars) return [text];
   
   const words = text.split(' ');
   const lines = [];
   let currentLine = '';
   
   for (const word of words) {
+    // Se a palavra sozinha é maior que maxChars, força quebra
+    if (word.length > maxChars) {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = '';
+      }
+      // Quebra a palavra em pedaços
+      for (let i = 0; i < word.length; i += maxChars) {
+        lines.push(word.substring(i, i + maxChars));
+      }
+      continue;
+    }
+    
     const testLine = currentLine ? currentLine + ' ' + word : word;
     
     if (testLine.length > maxChars && currentLine) {
@@ -219,7 +233,8 @@ function wrapText(text, maxChars) {
   }
   
   if (currentLine) lines.push(currentLine);
-  return lines;
+  
+  return lines.length > 0 ? lines : [""];
 }
 
 /* ================= RENDER ================= */
@@ -249,15 +264,17 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(10);
 
-  // LAYOUT HORIZONTAL (2 colunas) - SEM definir size
+  // LAYOUT HORIZONTAL (2 colunas)
   const content = card.addStack();
   content.topAlignContent();
   content.layoutHorizontally();
   
   // ===== COLUNA ESQUERDA: Timeline =====
-  const left = content.addStack();
+  const leftWrapper = content.addStack();
+  leftWrapper.layoutVertically();
+  
+  const left = leftWrapper.addStack();
   left.layoutVertically();
-  // ✅ REMOVIDO: left.size = new Size(ui.leftColWidth, 0);
 
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
@@ -290,33 +307,49 @@ function renderTypeCard(w, group, ui) {
       end.lineLimit = 1;
     }
   }
+  
+  // Força a coluna esquerda a ter largura mínima
+  leftWrapper.addSpacer();
 
-  // ✅ Spacer fixo para simular largura da coluna esquerda
+  // Espaço entre colunas
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas =====
-  const right = content.addStack();
-  right.layoutVertically();
-  // ✅ SEM definir .size
-
+  // ===== COLUNA DIREITA: Legendas (wrapper para forçar wrap) =====
+  const rightWrapper = content.addStack();
+  rightWrapper.layoutVertically();
+  
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
   for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) right.addSpacer(10);
+    if (i > 0) rightWrapper.addSpacer(10);
 
-    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
+    // Stack para cada legenda
+    const legendStack = rightWrapper.addStack();
+    legendStack.layoutVertically();
+    
+    const lvl = legendStack.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
 
-    right.addSpacer(4);
+    legendStack.addSpacer(4);
 
-    // ✅ TEXTO COMPLETO - deve fazer wrap agora
-    const txt = right.addText(summaries[i].text || "");
-    txt.font = Font.systemFont(ui.descFont);
-    txt.textColor = new Color("#D5DBE7");
-    // NÃO definir lineLimit
+    // ✅ WRAP MANUAL: dividir texto em linhas
+    const fullText = summaries[i].text || "";
+    const lines = wrapText(fullText, ui.descMaxChars);
+    
+    for (let j = 0; j < lines.length; j++) {
+      if (j > 0) legendStack.addSpacer(1);
+      
+      const txt = legendStack.addText(lines[j]);
+      txt.font = Font.systemFont(ui.descFont);
+      txt.textColor = new Color("#D5DBE7");
+      // ✅ CRÍTICO: não definir lineLimit OU definir como null
+    }
   }
+  
+  // Força a coluna direita a expandir
+  rightWrapper.addSpacer();
 }
 
 /* ================= DATA ================= */

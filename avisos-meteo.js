@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.6";
+const SCRIPT_VERSION = "v1.0.7";
 
 async function main() {
   const AREA = "PTO";
@@ -253,7 +253,6 @@ function renderTypeCard(w, group, ui) {
   const content = card.addStack();
   content.topAlignContent();
   content.layoutHorizontally();
-  content.spacing = ui.colGap;
   
   // ===== COLUNA ESQUERDA: Timeline =====
   const left = content.addStack();
@@ -292,9 +291,13 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // ===== COLUNA DIREITA: Legendas com WRAP =====
+  // Espaço fixo entre colunas
+  content.addSpacer(ui.colGap);
+
+  // ===== COLUNA DIREITA: Legendas (OCUPA O RESTO) =====
   const right = content.addStack();
   right.layoutVertically();
+  // ✅ NÃO definir size - deixa ocupar o espaço restante
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -305,25 +308,15 @@ function renderTypeCard(w, group, ui) {
     const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
-    lvl.lineLimit = 0; // ← SEM ELLIPSIS
 
     right.addSpacer(4);
 
-    // ✅ WRAP MANUAL: quebrar texto em múltiplas linhas
-    const lines = wrapText(summaries[i].text || "", ui.descMaxChars);
-    
-    for (let j = 0; j < lines.length; j++) {
-      if (j > 0) right.addSpacer(1);
-      
-      const txt = right.addText(lines[j]);
-      txt.font = Font.systemFont(ui.descFont);
-      txt.textColor = new Color("#D5DBE7");
-      txt.lineLimit = 0; // ← SEM ELLIPSIS
-    }
+    // ✅ TEXTO COMPLETO sem quebra manual
+    const txt = right.addText(summaries[i].text || "");
+    txt.font = Font.systemFont(ui.descFont);
+    txt.textColor = new Color("#D5DBE7");
+    // NÃO definir lineLimit - deixa wrap natural
   }
-  
-  // ✅ FORÇAR largura total: spacer invisível
-  right.addSpacer();
 }
 
 /* ================= DATA ================= */

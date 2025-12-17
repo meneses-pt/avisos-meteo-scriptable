@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.14";
+const SCRIPT_VERSION = "v1.0.15";
 
 async function main() {
   const AREA = "PTO";
@@ -238,10 +238,8 @@ function wrapText(text, maxChars) {
 
 // ===== FUNÇÃO PARA CALCULAR LARGURA APROXIMADA DO TEXTO =====
 function estimateTextWidth(text, fontSize) {
-  // Aproximação MUITO conservadora:
-  // - Letra média em systemFont ≈ 0.55 * fontSize
-  // - Adicionamos margem de segurança de 15%
-  const avgCharWidth = fontSize * 0.55 * 1.15;
+  // Mais conservador - quebra ANTES para garantir que cabe
+  const avgCharWidth = fontSize * 0.6; // aumentei de 0.5 para 0.6
   return text.length * avgCharWidth;
 }
 
@@ -338,9 +336,10 @@ function renderTypeCard(w, group, ui) {
 
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas =====
+  // ===== COLUNA DIREITA: Legendas COM WRAP MANUAL =====
   const right = content.addStack();
   right.layoutVertically();
+  right.size = new Size(ui.rightColWidth, 0);
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -354,15 +353,14 @@ function renderTypeCard(w, group, ui) {
 
     right.addSpacer(4);
 
-    // ✅ WRAP BASEADO EM LARGURA CALCULADA
+    // ✅ CALCULAR WRAP MANUALMENTE E USAR \n
     const fullText = summaries[i].text || "";
-    const lines = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont);
+    const wrappedText = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont).join('\n');
     
-    // Usar um único addText com \n
-    const joinedText = lines.join('\n');
-    const txt = right.addText(joinedText);
+    const txt = right.addText(wrappedText);
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
+    // ✅ NÃO definir lineLimit - deixar o \n funcionar
   }
 }
 

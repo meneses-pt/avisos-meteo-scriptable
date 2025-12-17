@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.15";
+const SCRIPT_VERSION = "v1.0.16";
 
 async function main() {
   const AREA = "PTO";
@@ -246,6 +246,11 @@ function estimateTextWidth(text, fontSize) {
 function wrapTextToWidth(text, maxWidth, fontSize) {
   if (!text) return [""];
   
+  console.log("=== WRAP DEBUG ===");
+  console.log("Texto: " + text);
+  console.log("maxWidth: " + maxWidth);
+  console.log("fontSize: " + fontSize);
+  
   const words = text.split(' ');
   const lines = [];
   let currentLine = '';
@@ -254,7 +259,10 @@ function wrapTextToWidth(text, maxWidth, fontSize) {
     const testLine = currentLine ? currentLine + ' ' + word : word;
     const estimatedWidth = estimateTextWidth(testLine, fontSize);
     
+    console.log("Testando: '" + testLine + "' → width: " + estimatedWidth);
+    
     if (estimatedWidth > maxWidth && currentLine) {
+      console.log("QUEBRA! Linha completa: '" + currentLine + "'");
       lines.push(currentLine);
       currentLine = word;
     } else {
@@ -262,7 +270,14 @@ function wrapTextToWidth(text, maxWidth, fontSize) {
     }
   }
   
-  if (currentLine) lines.push(currentLine);
+  if (currentLine) {
+    console.log("Última linha: '" + currentLine + "'");
+    lines.push(currentLine);
+  }
+  
+  console.log("Total de linhas: " + lines.length);
+  console.log("Resultado: " + JSON.stringify(lines));
+  console.log("Joined com \\n: " + lines.join('\n'));
   
   return lines.length > 0 ? lines : [""];
 }

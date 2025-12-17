@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
 
-const SCRIPT_VERSION = "v1.0.3"; // ← INCREMENTA isto a cada mudança
+const SCRIPT_VERSION = "v1.0.4"; // ← INCREMENTA isto a cada mudança
 
 async function main() {
   const AREA = "PTO";
@@ -195,38 +195,12 @@ function uiForFamily(fam) {
   };
 }
 
-/* ================= TEXT WRAP ================= */
-
-function wrapText(text, maxWidth, font) {
-  // Se o texto for curto, retorna direto
-  if (text.length < maxWidth) return text;
-  
-  const words = text.split(' ');
-  const lines = [];
-  let currentLine = '';
-  
-  for (const word of words) {
-    const testLine = currentLine ? currentLine + ' ' + word : word;
-    
-    // Estimativa: ~6 pixels por caractere em fonte 12
-    if (testLine.length * 6 > maxWidth * 10) {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  }
-  
-  if (currentLine) lines.push(currentLine);
-  return lines.join('\n');
-}
-
 /* ================= RENDER ================= */
 
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
   card.layoutVertically();
-  card.topAlignContent(); // ← ADICIONA ISTO
+  card.topAlignContent();
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
@@ -246,11 +220,11 @@ function renderTypeCard(w, group, ui) {
   name.lineLimit = 1;
   name.minimumScaleFactor = 0.75;
 
-  card.addSpacer(8);
+  card.addSpacer(10);
 
   // LAYOUT HORIZONTAL (2 colunas)
   const content = card.addStack();
-  content.topAlignContent(); // ← ADICIONA ISTO
+  content.topAlignContent();
   content.layoutHorizontally();
   content.spacing = ui.colGap;
   
@@ -262,7 +236,7 @@ function renderTypeCard(w, group, ui) {
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
   for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) left.addSpacer(3);
+    if (i > 0) left.addSpacer(4);
 
     const row = left.addStack();
     row.centerAlignContent();
@@ -271,7 +245,7 @@ function renderTypeCard(w, group, ui) {
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
     dot.textColor = levelColor(blocks[i].level);
 
-    row.addSpacer(5);
+    row.addSpacer(6);
 
     const start = row.addText(blocks[i].startLabel);
     start.font = Font.systemFont(ui.timelineFont);
@@ -279,7 +253,7 @@ function renderTypeCard(w, group, ui) {
     start.lineLimit = 1;
 
     if (blocks[i].endLabel) {
-      left.addSpacer(1);
+      left.addSpacer(2);
 
       const endRow = left.addStack();
       endRow.addSpacer(ui.indent);
@@ -291,7 +265,7 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // ===== COLUNA DIREITA: Legendas =====
+  // ===== COLUNA DIREITA: Legendas (SEM largura fixa) =====
   const right = content.addStack();
   right.layoutVertically();
 
@@ -299,17 +273,15 @@ function renderTypeCard(w, group, ui) {
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
   for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) right.addSpacer(8);
+    if (i > 0) right.addSpacer(10);
 
-    // ✅ WRAPPER com largura fixa para a descrição
-    const txtWrapper = right.addStack();
-    txtWrapper.layoutVertically();
-    txtWrapper.size = new Size(ui.rightColWidth, 0);
-    
-    // ✅ FORÇAR quebra manual
-    const wrappedText = wrapText(summaries[i].text || "", ui.rightColWidth, ui.descFont);
-    
-    const txt = txtWrapper.addText(wrappedText);
+    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
+    lvl.font = Font.boldSystemFont(ui.levelFont);
+    lvl.textColor = levelColor(summaries[i].level);
+
+    right.addSpacer(4);
+
+    const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
   }

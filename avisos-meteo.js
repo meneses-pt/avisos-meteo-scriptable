@@ -109,6 +109,8 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
+      leftColWidth: 140,    // ← NOVO
+      colGap: 12,           // ← NOVO
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
@@ -132,6 +134,8 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
+      leftColWidth: 100,    // ← NOVO
+      colGap: 8,            // ← NOVO
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
@@ -155,6 +159,8 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
+    leftColWidth: 120,    // ← NOVO
+    colGap: 10,           // ← NOVO
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
@@ -192,41 +198,22 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // ✅ LAYOUT HORIZONTAL CORRIGIDO
+  // ✅ LAYOUT HORIZONTAL COM LARGURAS FIXAS
   const content = card.addStack();
   content.layoutHorizontally();
   content.topAlignContent();
   
-  // Coluna esquerda: timeline
+  // Coluna esquerda: timeline (largura fixa)
   const left = content.addStack();
   left.layoutVertically();
+  left.size = new Size(ui.leftColWidth, 0);
   
-  // Spacer flexível ENTRE as colunas
-  content.addSpacer();
+  // Spacer fixo entre colunas
+  content.addSpacer(ui.colGap);
   
-  // Coluna direita: legendas (último elemento → ocupa espaço restante)
+  // Coluna direita: legendas (ocupa resto)
   const right = content.addStack();
   right.layoutVertically();
-
-  // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
-  const summaries = buildLevelSummaries(group.items)
-    .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
-
-  for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) right.addSpacer(8);
-
-    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
-    lvl.font = Font.boldSystemFont(ui.levelFont);
-    lvl.textColor = levelColor(summaries[i].level);
-    lvl.lineLimit = 0;
-
-    right.addSpacer(3);
-
-    const txt = right.addText(summaries[i].text || "");
-    txt.font = Font.systemFont(ui.descFont);
-    txt.textColor = new Color("#D5DBE7");
-    txt.lineLimit = 0; // ✅ wrap ativado
-  }
 
   // LEFT: timeline compacta (2 linhas)
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
@@ -259,6 +246,26 @@ function renderTypeCard(w, group, ui) {
       end.textColor = new Color("#7E8AA6");
       end.lineLimit = 1;
     }
+  }
+
+  // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
+  const summaries = buildLevelSummaries(group.items)
+    .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
+
+  for (let i = 0; i < summaries.length; i++) {
+    if (i > 0) right.addSpacer(8);
+
+    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
+    lvl.font = Font.boldSystemFont(ui.levelFont);
+    lvl.textColor = levelColor(summaries[i].level);
+    lvl.lineLimit = 1;
+
+    right.addSpacer(3);
+
+    const txt = right.addText(summaries[i].text || "");
+    txt.font = Font.systemFont(ui.descFont);
+    txt.textColor = new Color("#D5DBE7");
+    txt.lineLimit = 0; // ✅ wrap ativado
   }
 }
 

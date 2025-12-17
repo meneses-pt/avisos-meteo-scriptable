@@ -1,18 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
-  <title>Avisos – Preview</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <title>Avisos – Preview</title>
+  <style>
+    body { margin:0; background:#0B1220; color:#fff; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;}
+    .widget { width:360px; height:390px; margin:24px auto; padding:12px; overflow:hidden; }
+    .card { background:#111B2E; border-radius:16px; padding:12px; margin-bottom:12px; }
+    .card-header { font-weight:700; margin-bottom:10px; display:flex; gap:6px; align-items:center; }
+    .grid { display:grid; grid-template-columns: 1fr 170px; gap:12px; }
+    .tl .b { margin-bottom:6px; }
+    .tl .start { color:#A6B0C3; font-size:12px; }
+    .tl .end { color:#7E8AA6; font-size:10px; margin-left:18px; margin-top:2px; }
+    .lvl { font-size:10px; font-weight:800; margin-bottom:4px; }
+    .desc { font-size:12px; color:#D5DBE7; line-height:1.3; margin-bottom:10px; }
+    .yellow { color:#FFE27A; } .orange { color:#FFB86B; } .red { color:#FF6B6B; }
+  </style>
 </head>
 <body>
+  <div class="widget">
+    <div id="content">A carregar…</div>
+  </div>
 
-<div class="widget large">
-  <div id="content"></div>
-</div>
-
-<script src="https://raw.githubusercontent.com/meneses-pt/avisos-meteo-scriptable/main/preview.js"></script>
-
+  <script src="./preview.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.5";
+const SCRIPT_VERSION = "v1.0.6";
 
 async function main() {
   const AREA = "PTO";
@@ -146,7 +146,7 @@ function uiForFamily(fam) {
       timelineFontSmall: 11,
       maxTimelineBlocks: 14,
       indent: 22,
-      descMaxChars: 45, // caracteres por linha (aprox)
+      descMaxChars: 50, // ← era 45, agora 50
     };
   }
 
@@ -170,7 +170,7 @@ function uiForFamily(fam) {
       timelineFontSmall: 10,
       maxTimelineBlocks: 8,
       indent: 18,
-      descMaxChars: 30,
+      descMaxChars: 32, // ← era 30, agora 32
     };
   }
 
@@ -194,7 +194,7 @@ function uiForFamily(fam) {
     timelineFontSmall: 10,
     maxTimelineBlocks: 10,
     indent: 18,
-    descMaxChars: 35,
+    descMaxChars: 38, // ← era 35, agora 38
   };
 }
 
@@ -305,6 +305,7 @@ function renderTypeCard(w, group, ui) {
     const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
+    lvl.lineLimit = 0; // ← SEM ELLIPSIS
 
     right.addSpacer(4);
 
@@ -312,13 +313,17 @@ function renderTypeCard(w, group, ui) {
     const lines = wrapText(summaries[i].text || "", ui.descMaxChars);
     
     for (let j = 0; j < lines.length; j++) {
-      if (j > 0) right.addSpacer(1); // pequeno espaço entre linhas
+      if (j > 0) right.addSpacer(1);
       
       const txt = right.addText(lines[j]);
       txt.font = Font.systemFont(ui.descFont);
       txt.textColor = new Color("#D5DBE7");
+      txt.lineLimit = 0; // ← SEM ELLIPSIS
     }
   }
+  
+  // ✅ FORÇAR largura total: spacer invisível
+  right.addSpacer();
 }
 
 /* ================= DATA ================= */

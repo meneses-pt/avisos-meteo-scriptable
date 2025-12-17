@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.17";
+const SCRIPT_VERSION = "v1.0.18";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -356,33 +356,36 @@ function renderTypeCard(w, group, ui) {
 
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas COM WRAP MANUAL =====
+  // ===== COLUNA DIREITA: Legendas COM MÚLTIPLOS addText() =====
   const right = content.addStack();
   right.layoutVertically();
   right.size = new Size(ui.rightColWidth, 0);
-
+  
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
-
+  
   for (let i = 0; i < summaries.length; i++) {
     if (i > 0) right.addSpacer(10);
-
+  
     const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
-
+  
     right.addSpacer(4);
-
-    // ✅ CALCULAR WRAP MANUALMENTE E USAR \n
+  
+    // ✅ CALCULAR WRAP E CRIAR UM addText() POR LINHA
     const fullText = summaries[i].text || "";
-    const wrappedText = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont).join('\n');
+    const lines = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont);
     
-    const txt = right.addText(wrappedText);
-    txt.font = Font.systemFont(ui.descFont);
-    txt.textColor = new Color("#D5DBE7");
-    // ✅ NÃO definir lineLimit - deixar o \n funcionar
+    for (let j = 0; j < lines.length; j++) {
+      if (j > 0) right.addSpacer(2); // espaço entre linhas
+      
+      const txt = right.addText(lines[j]);
+      txt.font = Font.systemFont(ui.descFont);
+      txt.textColor = new Color("#D5DBE7");
+      txt.lineLimit = 1; // cada linha é independente
+    }
   }
-}
 
 /* ================= DATA ================= */
 

@@ -1,8 +1,8 @@
 // Avisos IPMA – Widget iOS (Scriptable)
 // Layout 2 colunas: timeline à esquerda, descrições à direita
-// Fonte: Cloudflare Worker
+// Fonte: Cloudflare Worker (parsing defensivo)
 
-function runWidget() {
+async function runWidget() {
   const AREA = "PTO";
   const ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
 
@@ -35,7 +35,7 @@ function runWidget() {
   pillText.font = Font.boldSystemFont(ui.pillFont);
 
   if (ui.showSubtitle) {
-    w.addSpacer(4); // MAIS AR NO TOPO
+    w.addSpacer(4); // mais ar no topo
     const sub = w.addText(ui.subtitleText);
     sub.font = Font.systemFont(ui.subtitleFont);
     sub.textColor = new Color("#A6B0C3");
@@ -45,39 +45,49 @@ function runWidget() {
 
   /* ================= DATA ================= */
 
-  const req = new Request(ENDPOINT);
-  req.timeoutInterval = 10;
-
-  req.loadJSON().then(data => {
-    const warnings = data.warnings || [];
-
-    const maxLevel = getMaxLevel(warnings);
-    setTopPill(pill, pillText, warnings.length, maxLevel);
-
-    if (!warnings.length) {
-      const t = w.addText("Sem avisos relevantes.");
-      t.font = Font.systemFont(ui.bodyFont);
-      t.textColor = new Color("#D5DBE7");
-      finish(w);
-      return;
-    }
-
-    const groups = groupByType(warnings);
-    groups.sort((a, b) => priority(b.maxLevel) - priority(a.maxLevel));
-
-    for (let i = 0; i < groups.length; i++) {
-      if (i > 0) w.addSpacer(10);
-      renderTypeCard(w, groups[i], ui);
-    }
-
-    w.addSpacer();
-    renderFooter(w);
+  let data;
+  try {
+    const req = new Request(ENDPOINT);
+    req.timeoutInterval = 10;
+    data = await req.loadJSON();
+  } catch (e) {
+    renderError(w, "Erro ao contactar o serviço", e);
     finish(w);
-  }).catch(err => {
-    const e = w.addText("Erro ao carregar avisos");
-    e.textColor = Color.red();
+    return;
+  }
+
+  // Parsing defensivo
+  let warnings = [];
+  if (data && typeof data === "object") {
+    if (Array.isArray(data.warnings)) {
+      warnings = data.warnings;
+    } else if (Array.isArray(data)) {
+      warnings = data;
+    }
+  }
+
+  const maxLevel = getMaxLevel(warnings);
+  setTopPill(pill, pillText, warnings.length, maxLevel);
+
+  if (!warnings.length) {
+    const t = w.addText("Sem avisos relevantes.");
+    t.font = Font.systemFont(ui.bodyFont);
+    t.textColor = new Color("#D5DBE7");
     finish(w);
-  });
+    return;
+  }
+
+  const groups = groupByType(warnings);
+  groups.sort((a, b) => priority(b.maxLevel) - priority(a.maxLevel));
+
+  for (let i = 0; i < groups.length; i++) {
+    if (i > 0) w.addSpacer(10);
+    renderTypeCard(w, groups[i], ui);
+  }
+
+  w.addSpacer();
+  renderFooter(w);
+  finish(w);
 }
 
 /* ================= UI CONFIG ================= */
@@ -96,7 +106,7 @@ function uiForFamily(fam) {
       timelineFont: 13,
       descFont: 12,
       levelFont: 11,
-      rightColWidth: 190
+      rightColWidth: 190,
     };
   }
 
@@ -113,7 +123,7 @@ function uiForFamily(fam) {
     timelineFont: 12,
     descFont: 12,
     levelFont: 10,
-    rightColWidth: 165
+    rightColWidth: 165,
   };
 }
 
@@ -126,7 +136,7 @@ function renderTypeCard(w, group, ui) {
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  /* Header da categoria */
+  // Header da categoria
   const top = card.addStack();
   top.centerAlignContent();
 
@@ -143,7 +153,7 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(10);
 
-  /* Conteúdo 2 colunas */
+  // Conteúdo 2 colunas
   const content = card.addStack();
   content.topAlignContent();
 
@@ -156,7 +166,7 @@ function renderTypeCard(w, group, ui) {
   right.layoutVertically();
   right.size = new Size(ui.rightColWidth, 0);
 
-  /* RIGHT – descrições (wrap livre) */
+  // RIGHT – descrições por nível (wrap natural)
   const summaries = buildLevelSummaries(group.items);
   summaries.forEach((s, idx) => {
     if (idx > 0) right.addSpacer(10);
@@ -167,15 +177,14 @@ function renderTypeCard(w, group, ui) {
 
     right.addSpacer(4);
 
-    const txt = right.addText(s.text);
+    const txt = right.addText(s.text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // SEM lineLimit → wrap natural
   });
 
-  /* LEFT – timeline */
+  // LEFT – timeline
   const items = [...group.items].sort((a, b) =>
-    String(a.start).localeCompare(String(b.start))
+    String(a.start || "").localeCompare(String(b.start || ""))
   );
 
   items.forEach((it, i) => {
@@ -201,7 +210,9 @@ function renderTypeCard(w, group, ui) {
 function groupByType(warnings) {
   const map = {};
   warnings.forEach(w => {
-    if (!map[w.type]) map[w.type] = { type: w.type, items: [], maxLevel: "green" };
+    if (!map[w.type]) {
+      map[w.type] = { type: w.type, items: [], maxLevel: "green" };
+    }
     map[w.type].items.push(w);
     if (priority(w.level) > priority(map[w.type].maxLevel)) {
       map[w.type].maxLevel = w.level;
@@ -231,24 +242,44 @@ function setTopPill(pill, text, count, level) {
 function renderFooter(w) {
   const f = w.addText(
     "Atualizado " +
-    new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+      new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
   );
   f.font = Font.systemFont(10);
   f.textColor = new Color("#7E8AA6");
 }
 
+/* ================= ERROR ================= */
+
+function renderError(w, title, err) {
+  const t = w.addText(title);
+  t.font = Font.boldSystemFont(12);
+  t.textColor = Color.red();
+
+  if (err) {
+    w.addSpacer(6);
+    const d = w.addText(String(err));
+    d.font = Font.systemFont(10);
+    d.textColor = new Color("#A6B0C3");
+    d.lineLimit = 3;
+  }
+}
+
 /* ================= TIME ================= */
 
 function formatPeriod(startIso, endIso) {
-  const s = new Date(startIso);
-  const e = new Date(endIso);
-  return (
-    s.toLocaleDateString("pt-PT", { weekday: "short" }) +
-    " " +
-    s.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) +
-    "–" +
-    e.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
-  );
+  try {
+    const s = new Date(startIso);
+    const e = new Date(endIso);
+    return (
+      s.toLocaleDateString("pt-PT", { weekday: "short" }) +
+      " " +
+      s.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) +
+      "–" +
+      e.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+    );
+  } catch {
+    return "";
+  }
 }
 
 /* ================= LEVELS ================= */
@@ -287,7 +318,7 @@ function levelFg(l) {
 }
 
 function iconForType(type) {
-  const t = type.toLowerCase();
+  const t = String(type || "").toLowerCase();
   if (t.includes("agitação") || t.includes("mar")) return "🌊";
   if (t.includes("vento")) return "💨";
   if (t.includes("precip") || t.includes("chuva")) return "🌧️";

@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
 
-const SCRIPT_VERSION = "v1.0.1"; // ← INCREMENTA isto a cada mudança
+const SCRIPT_VERSION = "v1.0.2"; // ← INCREMENTA isto a cada mudança
 
 async function main() {
   const AREA = "PTO";
@@ -95,16 +95,21 @@ async function main() {
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
   
-  // ✅ VERSÃO (canto inferior direito)
-  w.addSpacer(); // empurra para baixo
+  // Rodapé com versão e última atualização
+  w.addSpacer();
   
   const footer = w.addStack();
-  footer.addSpacer();
+  footer.bottomAlignContent();
   
-  const ver = footer.addText(SCRIPT_VERSION);
-  ver.font = Font.systemFont(8);
-  ver.textColor = new Color("#3A4A5A");
-  ver.opacity = 0.6;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+  
+  const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
+  info.font = Font.systemFont(8);
+  info.textColor = new Color("#3A4A5A");
+  info.opacity = 0.6;
+  
+  footer.addSpacer();
   
   finish(w);
 }

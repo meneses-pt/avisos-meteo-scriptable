@@ -1,9 +1,14 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.16";
+const SCRIPT_VERSION = "v1.0.17";
 
 async function main() {
+  // ✅ LOG DA VERSÃO
+  console.log("========================================");
+  console.log("AVISOS IPMA - " + SCRIPT_VERSION);
+  console.log("========================================");
+  
   const AREA = "PTO";
   const ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
 

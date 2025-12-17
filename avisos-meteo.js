@@ -1,13 +1,5 @@
 // avisos-meteo.js (REMOTO) — Scriptable
-// Requer: o loader chama `await main()`
-// Fixes:
-// - inclui uiForFamily (faltava)
-// - cards a ocupar largura total
-// - descrições com wrap (sem ellipsis)
-// - timeline: start e end em linhas diferentes; end só aparece se for diferente do start seguinte
-// - timeline mais compacta
-// - legendas ordenadas: amarelo → laranja → vermelho
-// - timeout curto + cache local de dados
+// Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
 
 async function main() {
   const AREA = "PTO";
@@ -26,7 +18,7 @@ async function main() {
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=" + AREA;
 
-  /* ---------- HEADER ---------- */
+  // HEADER
   const header = w.addStack();
   header.centerAlignContent();
 
@@ -54,7 +46,7 @@ async function main() {
 
   w.addSpacer(ui.afterHeaderSpace);
 
-  /* ---------- DATA (cache + fetch) ---------- */
+  // DATA (cache + fetch)
   let cached = null;
   if (fm.fileExists(cachePath)) {
     try { cached = JSON.parse(fm.readString(cachePath)); } catch {}
@@ -63,7 +55,7 @@ async function main() {
   let data = null;
   try {
     const req = new Request(ENDPOINT);
-    req.timeoutInterval = 5; // importante para widgets
+    req.timeoutInterval = 5;
     req.headers = { Accept: "application/json" };
     data = await req.loadJSON();
     if (Array.isArray(data?.warnings)) {
@@ -91,9 +83,8 @@ async function main() {
     return;
   }
 
-  /* ---------- GROUPS ---------- */
   const groups = groupByType(warnings);
-  groups.sort((a, b) => priorityDesc(b.maxLevel) - priorityDesc(a.maxLevel)); // categorias por severidade máx
+  groups.sort((a, b) => priorityDesc(b.maxLevel) - priorityDesc(a.maxLevel));
 
   for (let i = 0; i < groups.length; i++) {
     if (i > 0) w.addSpacer(10);
@@ -118,7 +109,7 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
-      rightColWidth: 190,
+      rightColWidth: 200,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
@@ -127,7 +118,7 @@ function uiForFamily(fam) {
       blockGap: 5,
       lineGap: 2,
       dotGap: 6,
-      indent: 20, // alinhamento da 2ª linha
+      indent: 20,
     };
   }
 
@@ -166,7 +157,7 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
-    rightColWidth: 165,
+    rightColWidth: 180,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
@@ -184,12 +175,11 @@ function uiForFamily(fam) {
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
   card.layoutVertically();
-  card.size = new Size(0, 0);          // força largura total
+  card.size = new Size(0, 0); // tenta ocupar a largura disponível
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // header do card
   const top = card.addStack();
   top.centerAlignContent();
 
@@ -208,8 +198,8 @@ function renderTypeCard(w, group, ui) {
 
   // 2 colunas
   const content = card.addStack();
-  content.size = new Size(0, 0);       // ajuda a esticar
   content.topAlignContent();
+  content.size = new Size(0, 0); // importantíssimo para “esticar”
 
   const left = content.addStack();
   left.layoutVertically();
@@ -219,6 +209,9 @@ function renderTypeCard(w, group, ui) {
   const right = content.addStack();
   right.layoutVertically();
   right.size = new Size(ui.rightColWidth, 0);
+
+  // *** ISTO FORÇA MESMO O CARD A OCUPAR A LARGURA TODA ***
+  content.addSpacer();
 
   // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
   const summaries = buildLevelSummaries(group.items)
@@ -230,13 +223,14 @@ function renderTypeCard(w, group, ui) {
     const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
+    lvl.lineLimit = 0;
 
     right.addSpacer(3);
 
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // NÃO meter lineLimit -> wrap natural
+    txt.lineLimit = 0; // *** WRAP REAL ***
   }
 
   // LEFT: timeline compacta (2 linhas)
@@ -245,7 +239,6 @@ function renderTypeCard(w, group, ui) {
   for (let i = 0; i < blocks.length; i++) {
     if (i > 0) left.addSpacer(ui.blockGap);
 
-    // linha 1: dot + start
     const r1 = left.addStack();
     r1.centerAlignContent();
 
@@ -260,12 +253,11 @@ function renderTypeCard(w, group, ui) {
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
 
-    // linha 2 opcional: end (mais juntinho)
     if (blocks[i].endLabel) {
       left.addSpacer(ui.lineGap);
 
       const r2 = left.addStack();
-      r2.addSpacer(ui.indent); // indent para alinhar com texto do start
+      r2.addSpacer(ui.indent);
 
       const end = r2.addText(blocks[i].endLabel);
       end.font = Font.systemFont(ui.timelineFontSmall);
@@ -300,7 +292,6 @@ function groupByType(ws) {
 }
 
 function buildLevelSummaries(items) {
-  // por nível, escolhe o primeiro (podes trocar por “mais cedo” se quiseres)
   const map = {};
   for (const w of items) {
     if (!map[w.level]) map[w.level] = w;
@@ -315,7 +306,6 @@ function buildTimelineBlocks(items) {
     const next = sorted[i + 1];
     const endMs = safeMs(cur.end);
     const nextStartMs = next ? safeMs(next.start) : null;
-
     const showEnd = (endMs !== null) && (nextStartMs === null || endMs !== nextStartMs);
 
     return {
@@ -350,7 +340,6 @@ function fmtStart(iso) {
 
 function fmtEnd(iso) {
   try {
-    // compacto: só hora
     return new Date(iso).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
@@ -359,15 +348,8 @@ function fmtEnd(iso) {
 
 /* ================= LEVELS ================= */
 
-function priorityAsc(l) {
-  // ordem que queres nas legendas: amarelo -> laranja -> vermelho
-  return { yellow: 1, orange: 2, red: 3, green: 9 }[l] ?? 9;
-}
-
-function priorityDesc(l) {
-  // severidade para ordenar categorias / máximo
-  return { green: 1, yellow: 2, orange: 3, red: 4 }[l] ?? 0;
-}
+function priorityAsc(l) { return { yellow: 1, orange: 2, red: 3, green: 9 }[l] ?? 9; }
+function priorityDesc(l) { return { green: 1, yellow: 2, orange: 3, red: 4 }[l] ?? 0; }
 
 function getMaxLevel(ws) {
   let max = "green";

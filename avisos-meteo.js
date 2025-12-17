@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.11";
+const SCRIPT_VERSION = "v1.0.12";
 
 async function main() {
   const AREA = "PTO";
@@ -137,16 +137,14 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 16,
       cardTitleFont: 13,
-      leftColWidth: 95,
-      rightColWidth: 220,
-      colGap: 14,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
       timelineFontSmall: 11,
+      timelineFontCompact: 11, // ← NOVO
+      timelineItemsPerRow: 5,   // ← NOVO (5 pills por linha em large)
       maxTimelineBlocks: 14,
       indent: 22,
-      descMaxChars: 50, // ← era 45, agora 50
     };
   }
 
@@ -161,16 +159,14 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
-      leftColWidth: 85,
-      rightColWidth: 120,
-      colGap: 8,
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
       timelineFontSmall: 10,
+      timelineFontCompact: 10, // ← NOVO
+      timelineItemsPerRow: 2,   // ← NOVO (2 pills por linha em small)
       maxTimelineBlocks: 8,
       indent: 18,
-      descMaxChars: 32, // ← era 30, agora 32
     };
   }
 
@@ -185,16 +181,14 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
-    leftColWidth: 100,
-    rightColWidth: 165,
-    colGap: 10,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
     timelineFontSmall: 10,
+    timelineFontCompact: 10, // ← NOVO
+    timelineItemsPerRow: 3,   // ← NOVO (3 pills por linha em medium)
     maxTimelineBlocks: 10,
     indent: 18,
-    descMaxChars: 38, // ← era 35, agora 38
   };
 }
 
@@ -247,7 +241,7 @@ function renderTypeCard(w, group, ui) {
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // Header do card
+  // Header
   const top = card.addStack();
   top.centerAlignContent();
 
@@ -264,87 +258,75 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(10);
 
-  // LAYOUT HORIZONTAL (2 colunas)
-  const content = card.addStack();
-  content.topAlignContent();
-  content.layoutHorizontally();
-  
-  // ===== COLUNA ESQUERDA: Timeline =====
-  const leftWrapper = content.addStack();
-  leftWrapper.layoutVertically();
-  
-  const left = leftWrapper.addStack();
-  left.layoutVertically();
-
+  // ===== TIMELINE HORIZONTAL (compacta) =====
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
-
-  for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) left.addSpacer(4);
-
-    const row = left.addStack();
+  
+  // Dividir em linhas se necessário (máximo 3-4 por linha)
+  const itemsPerRow = ui.timelineItemsPerRow || 4;
+  
+  for (let i = 0; i < blocks.length; i += itemsPerRow) {
+    if (i > 0) card.addSpacer(6);
+    
+    const row = card.addStack();
     row.centerAlignContent();
-
-    const dot = row.addText("●");
-    dot.font = Font.boldSystemFont(ui.timelineFont + 2);
-    dot.textColor = levelColor(blocks[i].level);
-
-    row.addSpacer(6);
-
-    const start = row.addText(blocks[i].startLabel);
-    start.font = Font.systemFont(ui.timelineFont);
-    start.textColor = new Color("#A6B0C3");
-    start.lineLimit = 1;
-
-    if (blocks[i].endLabel) {
-      left.addSpacer(2);
-
-      const endRow = left.addStack();
-      endRow.addSpacer(ui.indent);
-
-      const end = endRow.addText(blocks[i].endLabel);
-      end.font = Font.systemFont(ui.timelineFontSmall);
-      end.textColor = new Color("#7E8AA6");
-      end.lineLimit = 1;
+    
+    const rowBlocks = blocks.slice(i, i + itemsPerRow);
+    
+    for (let j = 0; j < rowBlocks.length; j++) {
+      if (j > 0) row.addSpacer(8);
+      
+      const block = rowBlocks[j];
+      
+      // Pill/Badge para cada horário
+      const pill = row.addStack();
+      pill.layoutHorizontally();
+      pill.centerAlignContent();
+      pill.setPadding(4, 8, 4, 8);
+      pill.cornerRadius = 8;
+      pill.backgroundColor = new Color(levelColor(block.level).hex, 0.2);
+      pill.borderWidth = 1;
+      pill.borderColor = levelColor(block.level);
+      
+      const timeText = pill.addText(block.startLabel);
+      timeText.font = Font.boldSystemFont(ui.timelineFontCompact);
+      timeText.textColor = levelColor(block.level);
+      timeText.lineLimit = 1;
     }
   }
   
-  leftWrapper.addSpacer();
+  // Se houver endLabel, mostrar numa linha separada (opcional)
+  const hasEndLabels = blocks.some(b => b.endLabel);
+  if (hasEndLabels) {
+    card.addSpacer(4);
+    const endRow = card.addStack();
+    endRow.centerAlignContent();
+    
+    const endText = endRow.addText("até " + blocks.find(b => b.endLabel)?.endLabel || "");
+    endText.font = Font.systemFont(ui.timelineFontSmall);
+    endText.textColor = new Color("#7E8AA6");
+    endText.lineLimit = 1;
+  }
 
-  // Espaço entre colunas
-  content.addSpacer(ui.colGap);
+  card.addSpacer(12);
 
-  // ===== COLUNA DIREITA: Legendas =====
-  const rightWrapper = content.addStack();
-  rightWrapper.layoutVertically();
-  
+  // ===== LEGENDAS (embaixo) - WRAP GARANTIDO =====
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
   for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) rightWrapper.addSpacer(10);
+    if (i > 0) card.addSpacer(8);
 
-    const legendStack = rightWrapper.addStack();
-    legendStack.layoutVertically();
-    
-    const lvl = legendStack.addText(levelLabel(summaries[i].level).toUpperCase());
+    const lvl = card.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
 
-    legendStack.addSpacer(4);
+    card.addSpacer(3);
 
-    // ✅ USAR UM ÚNICO addText() com \n para quebras de linha
-    const fullText = summaries[i].text || "";
-    const lines = wrapText(fullText, ui.descMaxChars);
-    const joinedText = lines.join('\n'); // ← JUNTAR com quebra de linha
-    
-    const txt = legendStack.addText(joinedText);
+    const txt = card.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // ✅ CRÍTICO: definir lineLimit baseado no número de linhas
-    txt.lineLimit = lines.length;
+    // ✅ SEM lineLimit - wrap automático completo
   }
-  
-  rightWrapper.addSpacer();
 }
 
 /* ================= DATA ================= */

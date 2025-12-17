@@ -1,6 +1,8 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
 
+const SCRIPT_VERSION = "v1.0.1"; // ← INCREMENTA isto a cada mudança
+
 async function main() {
   const AREA = "PTO";
   const ENDPOINT = "https://avisos-meteo.andremeneses.workers.dev/?area=" + AREA;
@@ -92,6 +94,18 @@ async function main() {
   }
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  
+  // ✅ VERSÃO (canto inferior direito)
+  w.addSpacer(); // empurra para baixo
+  
+  const footer = w.addStack();
+  footer.addSpacer();
+  
+  const ver = footer.addText(SCRIPT_VERSION);
+  ver.font = Font.systemFont(8);
+  ver.textColor = new Color("#3A4A5A");
+  ver.opacity = 0.6;
+  
   finish(w);
 }
 
@@ -181,6 +195,7 @@ function uiForFamily(fam) {
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
   card.layoutVertically();
+  card.topAlignContent(); // ← ADICIONA ISTO
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
@@ -204,6 +219,7 @@ function renderTypeCard(w, group, ui) {
 
   // LAYOUT HORIZONTAL (2 colunas)
   const content = card.addStack();
+  content.topAlignContent(); // ← ADICIONA ISTO
   content.layoutHorizontally();
   content.spacing = ui.colGap;
   

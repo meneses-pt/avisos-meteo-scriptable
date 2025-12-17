@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
-// Fixes: largura total + wrap real das descrições + timeline compacta + legendas ordenadas
+// Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.4"; // ← INCREMENTA isto a cada mudança
+const SCRIPT_VERSION = "v1.0.5";
 
 async function main() {
   const AREA = "PTO";
@@ -16,7 +16,16 @@ async function main() {
   if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir, true);
 
   const w = new ListWidget();
-  w.setPadding(ui.pad, ui.pad, ui.pad, ui.pad);
+  
+  // Margens assimétricas (mais lateral no large)
+  if (fam === "large") {
+    w.setPadding(18, 20, 14, 20); // topo, direita, baixo, esquerda
+  } else if (fam === "medium") {
+    w.setPadding(12, 14, 10, 14);
+  } else {
+    w.setPadding(ui.pad, ui.pad, ui.pad, ui.pad);
+  }
+  
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=" + AREA;
 
@@ -95,7 +104,7 @@ async function main() {
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
   
-  // Rodapé com versão e última atualização
+  // Empurrar footer para o fundo
   w.addSpacer();
   
   const footer = w.addStack();
@@ -119,27 +128,25 @@ async function main() {
 function uiForFamily(fam) {
   if (fam === "large") {
     return {
-      pad: 16,
+      pad: 18,
       titleFont: 16,
       subtitleFont: 11,
       pillFont: 12,
       bodyFont: 13,
       showSubtitle: true,
       subtitleText: "Porto · próximos avisos",
-      afterHeaderSpace: 14,
+      afterHeaderSpace: 16,
       cardTitleFont: 13,
-      leftColWidth: 95,       // ← timeline (reduzida)
-      rightColWidth: 220,     // ← legendas (NOVA)
-      colGap: 12,
+      leftColWidth: 95,
+      rightColWidth: 220,
+      colGap: 14,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
       timelineFontSmall: 11,
       maxTimelineBlocks: 14,
-      blockGap: 5,
-      lineGap: 2,
-      dotGap: 6,
-      indent: 20,
+      indent: 22,
+      descMaxChars: 45, // caracteres por linha (aprox)
     };
   }
 
@@ -154,24 +161,22 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
-      leftColWidth: 100,
-      rightColWidth: 120,     // ← NOVA
+      leftColWidth: 85,
+      rightColWidth: 120,
       colGap: 8,
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
       timelineFontSmall: 10,
       maxTimelineBlocks: 8,
-      blockGap: 4,
-      lineGap: 2,
-      dotGap: 6,
       indent: 18,
+      descMaxChars: 30,
     };
   }
 
   // medium
   return {
-    pad: 10,
+    pad: 12,
     titleFont: 14,
     subtitleFont: 10,
     pillFont: 11,
@@ -180,19 +185,41 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
-    leftColWidth: 105,
-    rightColWidth: 180,      // ← NOVA
+    leftColWidth: 100,
+    rightColWidth: 165,
     colGap: 10,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
     timelineFontSmall: 10,
     maxTimelineBlocks: 10,
-    blockGap: 4,
-    lineGap: 2,
-    dotGap: 6,
     indent: 18,
+    descMaxChars: 35,
   };
+}
+
+/* ================= TEXT WRAP ================= */
+
+function wrapText(text, maxChars) {
+  if (!text || text.length <= maxChars) return [text];
+  
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    
+    if (testLine.length > maxChars && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  if (currentLine) lines.push(currentLine);
+  return lines;
 }
 
 /* ================= RENDER ================= */
@@ -265,7 +292,7 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // ===== COLUNA DIREITA: Legendas (SEM largura fixa) =====
+  // ===== COLUNA DIREITA: Legendas com WRAP =====
   const right = content.addStack();
   right.layoutVertically();
 
@@ -281,9 +308,16 @@ function renderTypeCard(w, group, ui) {
 
     right.addSpacer(4);
 
-    const txt = right.addText(summaries[i].text || "");
-    txt.font = Font.systemFont(ui.descFont);
-    txt.textColor = new Color("#D5DBE7");
+    // ✅ WRAP MANUAL: quebrar texto em múltiplas linhas
+    const lines = wrapText(summaries[i].text || "", ui.descMaxChars);
+    
+    for (let j = 0; j < lines.length; j++) {
+      if (j > 0) right.addSpacer(1); // pequeno espaço entre linhas
+      
+      const txt = right.addText(lines[j]);
+      txt.font = Font.systemFont(ui.descFont);
+      txt.textColor = new Color("#D5DBE7");
+    }
   }
 }
 

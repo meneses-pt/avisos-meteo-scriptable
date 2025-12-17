@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.12";
+const SCRIPT_VERSION = "v1.0.13";
 
 async function main() {
   const AREA = "PTO";
@@ -137,12 +137,13 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 16,
       cardTitleFont: 13,
+      leftColWidth: 95,
+      rightColWidth: 220,
+      colGap: 14,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
       timelineFontSmall: 11,
-      timelineFontCompact: 11, // ← NOVO
-      timelineItemsPerRow: 5,   // ← NOVO (5 pills por linha em large)
       maxTimelineBlocks: 14,
       indent: 22,
     };
@@ -159,12 +160,13 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
+      leftColWidth: 85,
+      rightColWidth: 120,
+      colGap: 8,
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
       timelineFontSmall: 10,
-      timelineFontCompact: 10, // ← NOVO
-      timelineItemsPerRow: 2,   // ← NOVO (2 pills por linha em small)
       maxTimelineBlocks: 8,
       indent: 18,
     };
@@ -181,12 +183,13 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
+    leftColWidth: 100,
+    rightColWidth: 165,
+    colGap: 10,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
     timelineFontSmall: 10,
-    timelineFontCompact: 10, // ← NOVO
-    timelineItemsPerRow: 3,   // ← NOVO (3 pills por linha em medium)
     maxTimelineBlocks: 10,
     indent: 18,
   };
@@ -233,6 +236,39 @@ function wrapText(text, maxChars) {
 
 /* ================= RENDER ================= */
 
+// ===== FUNÇÃO PARA CALCULAR LARGURA APROXIMADA DO TEXTO =====
+function estimateTextWidth(text, fontSize) {
+  // Aproximação MUITO conservadora:
+  // - Letra média em systemFont ≈ 0.55 * fontSize
+  // - Adicionamos margem de segurança de 15%
+  const avgCharWidth = fontSize * 0.55 * 1.15;
+  return text.length * avgCharWidth;
+}
+
+function wrapTextToWidth(text, maxWidth, fontSize) {
+  if (!text) return [""];
+  
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    const estimatedWidth = estimateTextWidth(testLine, fontSize);
+    
+    if (estimatedWidth > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  if (currentLine) lines.push(currentLine);
+  
+  return lines.length > 0 ? lines : [""];
+}
+
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
   card.layoutVertically();
@@ -241,7 +277,7 @@ function renderTypeCard(w, group, ui) {
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // Header
+  // Header do card
   const top = card.addStack();
   top.centerAlignContent();
 
@@ -258,74 +294,77 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(10);
 
-  // ===== TIMELINE HORIZONTAL (compacta) =====
+  // LAYOUT HORIZONTAL (2 colunas)
+  const content = card.addStack();
+  content.topAlignContent();
+  content.layoutHorizontally();
+  
+  // ===== COLUNA ESQUERDA: Timeline =====
+  const left = content.addStack();
+  left.layoutVertically();
+  left.size = new Size(ui.leftColWidth, 0);
+
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
-  
-  // Dividir em linhas se necessário (máximo 3-4 por linha)
-  const itemsPerRow = ui.timelineItemsPerRow || 4;
-  
-  for (let i = 0; i < blocks.length; i += itemsPerRow) {
-    if (i > 0) card.addSpacer(6);
-    
-    const row = card.addStack();
+
+  for (let i = 0; i < blocks.length; i++) {
+    if (i > 0) left.addSpacer(4);
+
+    const row = left.addStack();
     row.centerAlignContent();
-    
-    const rowBlocks = blocks.slice(i, i + itemsPerRow);
-    
-    for (let j = 0; j < rowBlocks.length; j++) {
-      if (j > 0) row.addSpacer(8);
-      
-      const block = rowBlocks[j];
-      
-      // Pill/Badge para cada horário
-      const pill = row.addStack();
-      pill.layoutHorizontally();
-      pill.centerAlignContent();
-      pill.setPadding(4, 8, 4, 8);
-      pill.cornerRadius = 8;
-      pill.backgroundColor = new Color(levelColor(block.level).hex, 0.2);
-      pill.borderWidth = 1;
-      pill.borderColor = levelColor(block.level);
-      
-      const timeText = pill.addText(block.startLabel);
-      timeText.font = Font.boldSystemFont(ui.timelineFontCompact);
-      timeText.textColor = levelColor(block.level);
-      timeText.lineLimit = 1;
+
+    const dot = row.addText("●");
+    dot.font = Font.boldSystemFont(ui.timelineFont + 2);
+    dot.textColor = levelColor(blocks[i].level);
+
+    row.addSpacer(6);
+
+    const start = row.addText(blocks[i].startLabel);
+    start.font = Font.systemFont(ui.timelineFont);
+    start.textColor = new Color("#A6B0C3");
+    start.lineLimit = 1;
+
+    if (blocks[i].endLabel) {
+      left.addSpacer(2);
+
+      const endRow = left.addStack();
+      endRow.addSpacer(ui.indent);
+
+      const end = endRow.addText(blocks[i].endLabel);
+      end.font = Font.systemFont(ui.timelineFontSmall);
+      end.textColor = new Color("#7E8AA6");
+      end.lineLimit = 1;
     }
   }
-  
-  // Se houver endLabel, mostrar numa linha separada (opcional)
-  const hasEndLabels = blocks.some(b => b.endLabel);
-  if (hasEndLabels) {
-    card.addSpacer(4);
-    const endRow = card.addStack();
-    endRow.centerAlignContent();
-    
-    const endText = endRow.addText("até " + blocks.find(b => b.endLabel)?.endLabel || "");
-    endText.font = Font.systemFont(ui.timelineFontSmall);
-    endText.textColor = new Color("#7E8AA6");
-    endText.lineLimit = 1;
-  }
 
-  card.addSpacer(12);
+  content.addSpacer(ui.colGap);
 
-  // ===== LEGENDAS (embaixo) - WRAP GARANTIDO =====
+  // ===== COLUNA DIREITA: Legendas =====
+  const right = content.addStack();
+  right.layoutVertically();
+  right.size = new Size(ui.rightColWidth, 0);
+
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
   for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) card.addSpacer(8);
+    if (i > 0) right.addSpacer(10);
 
-    const lvl = card.addText(levelLabel(summaries[i].level).toUpperCase());
+    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
 
-    card.addSpacer(3);
+    right.addSpacer(4);
 
-    const txt = card.addText(summaries[i].text || "");
+    // ✅ WRAP BASEADO EM LARGURA CALCULADA
+    const fullText = summaries[i].text || "";
+    const lines = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont);
+    
+    // Usar um único addText com \n
+    const joinedText = lines.join('\n');
+    const txt = right.addText(joinedText);
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // ✅ SEM lineLimit - wrap automático completo
+    txt.lineLimit = lines.length;
   }
 }
 

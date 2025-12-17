@@ -1,5 +1,5 @@
 // Avisos Meteo – Widget iOS (Scriptable)
-// Compacto por tipo: níveis únicos + descrição (a mais cedo por nível) + timeline com bolinhas
+// Compacto por tipo: níveis únicos (com marcador colorido) + timeline com bolinha (sem redundâncias)
 // Endpoint: https://avisos-meteo.andremeneses.workers.dev/?area=PTO
 
 function runWidget() {
@@ -14,7 +14,7 @@ function runWidget() {
   w.backgroundColor = new Color("#0B1220");
   w.url = "https://www.ipma.pt/pt/otempo/prev-sam/?p=PTO";
 
-  // Header (compacto e seguro no medium)
+  // Header: título + pill (apenas "X avisos", com cor do máximo)
   var header = w.addStack();
   header.centerAlignContent();
 
@@ -53,7 +53,7 @@ function runWidget() {
       var originalCount = warnings.length;
 
       var maxLevel = getMaxLevelFromWarnings(warnings);
-      applyStatusPill(statusPill, statusText, maxLevel, originalCount, ui);
+      applyStatusPillCountOnly(statusPill, statusText, maxLevel, originalCount);
 
       if (!warnings.length) {
         renderEmptyState(w, ui);
@@ -133,7 +133,6 @@ function uiForFamily(fam) {
       maxTypes: 1,
       maxTimelineRowsPerType: 5,
       cardTitleFont: 12,
-      chipFont: 10,
       descFont: 10,
       timelineFont: 10,
       showDescriptions: false,
@@ -153,13 +152,12 @@ function uiForFamily(fam) {
       maxTypes: 3,
       maxTimelineRowsPerType: 10,
       cardTitleFont: 13,
-      chipFont: 11,
       descFont: 10,
       timelineFont: 11,
       showDescriptions: true,
     };
   }
-  // medium: muito compacto para não cortar e mostrar info útil
+  // medium: compacto
   return {
     pad: 10,
     titleFont: 14,
@@ -170,13 +168,12 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 8,
     betweenCardsSpace: 9,
-    maxTypes: 1,              // medium: 1 tipo com bom detalhe
+    maxTypes: 1,
     maxTimelineRowsPerType: 8,
     cardTitleFont: 12,
-    chipFont: 10,
     descFont: 10,
     timelineFont: 10,
-    showDescriptions: true,   // mas curto (1 linha por nível)
+    showDescriptions: true,
   };
 }
 
@@ -248,7 +245,7 @@ function renderHiddenTypesSummary(w, groups, startIdx) {
   more.lineLimit = 2;
 }
 
-// ------------- CORE RENDER (o que pediste) -------------
+// ------------- CORE RENDER -------------
 
 function renderTypeCompact(w, group, ui) {
   var card = w.addStack();
@@ -257,7 +254,7 @@ function renderTypeCompact(w, group, ui) {
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
 
-  // Top row: icon + type + max chip
+  // Top row: icon + type + max chip (mantemos o chip do tipo, é útil e não redundante)
   var top = card.addStack();
   top.centerAlignContent();
 
@@ -274,13 +271,12 @@ function renderTypeCompact(w, group, ui) {
 
   top.addSpacer();
 
-  var maxChip = makeChip(top, group.maxLevel, ui);
+  makeLevelChip(top, group.maxLevel, ui);
 
   card.addSpacer(8);
 
-  // 1) Níveis únicos + descrição “a mais cedo por nível”
-  var levelSummaries = buildLevelSummaries(group.items); // [{level, text, firstStart}]
-  // Ordenar por gravidade desc, depois por firstStart asc
+  // 1) Níveis únicos + descrição (a mais cedo por nível)
+  var levelSummaries = buildLevelSummaries(group.items);
   levelSummaries.sort(function (a, b) {
     var pa = priority(String(a.level || "").toLowerCase());
     var pb = priority(String(b.level || "").toLowerCase());
@@ -288,34 +284,39 @@ function renderTypeCompact(w, group, ui) {
     return String(a.firstStart || "").localeCompare(String(b.firstStart || ""));
   });
 
-  // Linha de chips (níveis únicos)
-  var chipsRow = card.addStack();
-  chipsRow.centerAlignContent();
-
-  for (var i = 0; i < levelSummaries.length; i++) {
-    if (i > 0) chipsRow.addSpacer(6);
-    makeSmallChip(chipsRow, levelSummaries[i].level, ui);
-  }
-
-  // Descrições (uma por nível). No medium/large: sim (curtas). No small: não.
+  // Descrições com marcador colorido (sem pills)
   if (ui.showDescriptions) {
-    card.addSpacer(6);
     for (var d = 0; d < levelSummaries.length; d++) {
       var txt = levelSummaries[d].text ? levelSummaries[d].text : "";
       if (!txt) continue;
 
-      var line = card.addText(levelLabel(String(levelSummaries[d].level || "").toLowerCase()) + ": " + txt);
-      line.font = Font.systemFont(ui.descFont);
-      line.textColor = new Color("#D5DBE7");
-      line.lineLimit = 1; // curto para não rebentar layout
-      if (line.minimumScaleFactor !== undefined) line.minimumScaleFactor = 0.6;
+      if (d > 0) card.addSpacer(4);
+
+      var row = card.addStack();
+      row.centerAlignContent();
+
+      var lvl = String(levelSummaries[d].level || "").toLowerCase();
+
+      var dot = row.addText("●");
+      dot.font = Font.boldSystemFont(ui.descFont + 2);
+      dot.textColor = dotColor(lvl);
+
+      row.addSpacer(8);
+
+      var lineText = row.addText(txt);
+      lineText.font = Font.systemFont(ui.descFont);
+      lineText.textColor = new Color("#D5DBE7");
+      lineText.lineLimit = 1;
+      if (lineText.minimumScaleFactor !== undefined) lineText.minimumScaleFactor = 0.6;
     }
+
+    card.addSpacer(10);
+  } else {
+    // se não mostramos descrições, dar um espacinho antes da timeline
+    card.addSpacer(6);
   }
 
-  card.addSpacer(10);
-
-  // 2) Timeline: intervalos em ordem, com bolinhas coloridas do nível
-  // Ordenar avisos por start
+  // 2) Timeline: ● (cor) + intervalo (sem chip final)
   var items = group.items.slice(0);
   items.sort(function (a, b) {
     return String(a.start || "").localeCompare(String(b.start || ""));
@@ -341,25 +342,19 @@ function renderTimelineRow(parent, warn, ui) {
   var row = parent.addStack();
   row.centerAlignContent();
 
-  // Dot (●) colorido por nível
   var lvl = String(warn.level || "").toLowerCase();
+
   var dot = row.addText("●");
   dot.font = Font.boldSystemFont(ui.timelineFont + 2);
   dot.textColor = dotColor(lvl);
 
   row.addSpacer(8);
 
-  // Intervalo compacto
   var time = row.addText(timelinePeriod(warn.start, warn.end));
   time.font = Font.systemFont(ui.timelineFont);
   time.textColor = new Color("#A6B0C3");
   time.lineLimit = 1;
   if (time.minimumScaleFactor !== undefined) time.minimumScaleFactor = 0.6;
-
-  row.addSpacer();
-
-  // Mini chip com nível (para leitura rápida)
-  makeTinyChip(row, lvl, ui);
 }
 
 // --------- Data shaping ---------
@@ -387,13 +382,13 @@ function groupByType(warnings) {
   return out;
 }
 
-// “níveis únicos” + descrição (para cada nível escolhe a descrição do aviso que começa mais cedo)
+// níveis únicos + descrição: escolhe a descrição do aviso que começa mais cedo para cada nível
 function buildLevelSummaries(items) {
-  var byLevel = {}; // level -> {level, text, firstStart}
+  var byLevel = {};
   for (var i = 0; i < items.length; i++) {
     var w = items[i];
     var lvl = String(w.level || "").toLowerCase();
-    if (lvl === "green") continue; // se quiseres incluir verde, tira isto
+    if (lvl === "green") continue;
 
     var start = String(w.start || "");
     var txt = normText(w.text);
@@ -401,12 +396,10 @@ function buildLevelSummaries(items) {
     if (!byLevel[lvl]) {
       byLevel[lvl] = { level: lvl, text: txt, firstStart: start };
     } else {
-      // se este começa mais cedo, trocar a descrição
       if (start && byLevel[lvl].firstStart && start.localeCompare(byLevel[lvl].firstStart) < 0) {
         byLevel[lvl].firstStart = start;
         byLevel[lvl].text = txt;
       }
-      // se ainda não tinha texto e este tem, usar
       if (!byLevel[lvl].text && txt) byLevel[lvl].text = txt;
     }
   }
@@ -419,86 +412,26 @@ function buildLevelSummaries(items) {
   return out;
 }
 
-// --------- Chips ---------
+// --------- Top pill (count only) ---------
 
-function makeChip(stack, level, ui) {
-  var chip = stack.addStack();
-  chip.setPadding(3, 8, 3, 8);
-  chip.cornerRadius = 10;
-
-  var style = colorsForLevel(String(level || "").toLowerCase());
-  chip.backgroundColor = style.bg;
-
-  var t = chip.addText(levelLabel(String(level || "").toLowerCase()));
-  t.font = Font.boldSystemFont(ui.pillFont);
-  t.textColor = style.fg;
-  return chip;
-}
-
-function makeSmallChip(stack, level, ui) {
-  var chip = stack.addStack();
-  chip.setPadding(2, 7, 2, 7);
-  chip.cornerRadius = 10;
-
-  var style = colorsForLevel(String(level || "").toLowerCase());
-  chip.backgroundColor = style.bg;
-
-  var t = chip.addText(levelLabel(String(level || "").toLowerCase()));
-  t.font = Font.boldSystemFont(ui.chipFont);
-  t.textColor = style.fg;
-}
-
-function makeTinyChip(stack, level, ui) {
-  var chip = stack.addStack();
-  chip.setPadding(2, 6, 2, 6);
-  chip.cornerRadius = 10;
-
-  var style = colorsForLevel(String(level || "").toLowerCase());
-  chip.backgroundColor = style.bg;
-
-  var t = chip.addText(levelShort(String(level || "").toLowerCase()));
-  t.font = Font.boldSystemFont(9);
-  t.textColor = style.fg;
-}
-
-function levelShort(level) {
-  if (level === "red") return "V";
-  if (level === "orange") return "L";
-  if (level === "yellow") return "A";
-  if (level === "green") return "Vd";
-  return "!";
-}
-
-// --------- Status pill ---------
-
-function applyStatusPill(pill, textNode, maxLevel, originalCount, ui) {
-  if (!originalCount) {
+function applyStatusPillCountOnly(pill, textNode, maxLevel, count) {
+  if (!count) {
     pill.backgroundColor = new Color("#15311F");
     textNode.textColor = new Color("#9AF0B5");
-    textNode.text = "Sem avisos";
+    textNode.text = "0 avisos";
     return;
   }
-
   var style = colorsForLevel(String(maxLevel || "").toLowerCase());
   pill.backgroundColor = style.bg;
   textNode.textColor = style.fg;
-
-  // medium: texto curto para não cortar
-  if (ui && ui.titleFont <= 14) {
-    textNode.text = originalCount + " (máx. " + levelLabel(String(maxLevel || "").toLowerCase()) + ")";
-  } else {
-    textNode.text = originalCount + " avisos (máx. " + levelLabel(String(maxLevel || "").toLowerCase()) + ")";
-  }
+  textNode.text = count + " avisos";
 }
 
 // --------- Time formatting ---------
 
 function timelinePeriod(startIso, endIso) {
-  // compacto mas com dia quando muda
   var s = new Date(startIso);
   var e = new Date(endIso);
-
-  // se falhar parse, fallback simples
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return shortPeriod(startIso, endIso);
 
   var sameDay = s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate();
@@ -506,12 +439,7 @@ function timelinePeriod(startIso, endIso) {
   var sH = hhmm(s);
   var eH = hhmm(e);
 
-  if (sameDay) {
-    // "ter 12:37 → 03:00" (sem repetir o dia)
-    return dowShort(s) + " " + sH + " → " + eH;
-  }
-
-  // "ter 12:37 → qua 03:00"
+  if (sameDay) return dowShort(s) + " " + sH + " → " + eH;
   return dowShort(s) + " " + sH + " → " + dowShort(e) + " " + eH;
 }
 
@@ -537,7 +465,7 @@ function shortPeriod(startIso, endIso) {
 
 function shortDate(iso) {
   try {
-    var d = new Date(iso); // ajusta ao timezone do iPhone
+    var d = new Date(iso);
     return d.toLocaleString("pt-PT", {
       weekday: "short",
       day: "2-digit",
@@ -584,7 +512,6 @@ function colorsForLevel(level) {
 }
 
 function dotColor(level) {
-  // dot mais “vivo” para leitura rápida
   if (level === "red") return new Color("#FF6B6B");
   if (level === "orange") return new Color("#FFB86B");
   if (level === "yellow") return new Color("#FFE27A");
@@ -599,12 +526,25 @@ function levelLabel(level) {
   return "Aviso";
 }
 
+function makeLevelChip(stack, level, ui) {
+  var chip = stack.addStack();
+  chip.setPadding(3, 8, 3, 8);
+  chip.cornerRadius = 10;
+
+  var style = colorsForLevel(String(level || "").toLowerCase());
+  chip.backgroundColor = style.bg;
+
+  var t = chip.addText(levelLabel(String(level || "").toLowerCase()));
+  t.font = Font.boldSystemFont(ui.pillFont);
+  t.textColor = style.fg;
+}
+
 function iconForType(type) {
   var t = String(type || "").toLowerCase();
   if (t.indexOf("agitação") >= 0 || t.indexOf("mar") >= 0) return "🌊";
   if (t.indexOf("vento") >= 0) return "💨";
   if (t.indexOf("precip") >= 0 || t.indexOf("chuva") >= 0) return "🌧️";
-  if (t.indexOf("trovo") >= 0) return "⚡";
+  if (t.indexOf("trovo") >= 0) return "⛈️";
   if (t.indexOf("nevo") >= 0) return "🌫️";
   if (t.indexOf("frio") >= 0) return "🥶";
   if (t.indexOf("quente") >= 0 || t.indexOf("calor") >= 0) return "🥵";

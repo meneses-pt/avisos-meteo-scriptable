@@ -109,7 +109,8 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
-      leftColWidth: 95,
+      leftColWidth: 95,       // ← timeline (reduzida)
+      rightColWidth: 220,     // ← legendas (NOVA)
       colGap: 12,
       levelFont: 11,
       descFont: 12,
@@ -135,6 +136,7 @@ function uiForFamily(fam) {
       afterHeaderSpace: 10,
       cardTitleFont: 12,
       leftColWidth: 100,
+      rightColWidth: 120,     // ← NOVA
       colGap: 8,
       levelFont: 10,
       descFont: 11,
@@ -160,6 +162,7 @@ function uiForFamily(fam) {
     afterHeaderSpace: 12,
     cardTitleFont: 12,
     leftColWidth: 105,
+    rightColWidth: 180,      // ← NOVA
     colGap: 10,
     levelFont: 10,
     descFont: 12,
@@ -199,13 +202,22 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // Timeline (esquerda)
+  // ✅ LAYOUT HORIZONTAL (2 colunas)
+  const content = card.addStack();
+  content.layoutHorizontally();
+  content.spacing = ui.colGap;
+  
+  // ===== COLUNA ESQUERDA: Timeline =====
+  const left = content.addStack();
+  left.layoutVertically();
+  left.size = new Size(ui.leftColWidth, 0);
+
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
   for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) card.addSpacer(3);
+    if (i > 0) left.addSpacer(3);
 
-    const row = card.addStack();
+    const row = left.addStack();
     row.centerAlignContent();
 
     const dot = row.addText("●");
@@ -220,9 +232,9 @@ function renderTypeCard(w, group, ui) {
     start.lineLimit = 1;
 
     if (blocks[i].endLabel) {
-      card.addSpacer(1);
+      left.addSpacer(1);
 
-      const endRow = card.addStack();
+      const endRow = left.addStack();
       endRow.addSpacer(ui.indent);
 
       const end = endRow.addText(blocks[i].endLabel);
@@ -232,24 +244,28 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  card.addSpacer(10);
+  // ===== COLUNA DIREITA: Legendas =====
+  const right = content.addStack();
+  right.layoutVertically();
+  // ✅ FORÇAR largura máxima para a coluna direita
+  right.size = new Size(ui.rightColWidth, 0);
 
-  // Legendas (embaixo, largura total)
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
 
   for (let i = 0; i < summaries.length; i++) {
-    if (i > 0) card.addSpacer(8);
+    if (i > 0) right.addSpacer(8);
 
-    const lvl = card.addText(levelLabel(summaries[i].level).toUpperCase());
+    const lvl = right.addText(levelLabel(summaries[i].level).toUpperCase());
     lvl.font = Font.boldSystemFont(ui.levelFont);
     lvl.textColor = levelColor(summaries[i].level);
 
-    card.addSpacer(3);
+    right.addSpacer(3);
 
-    const txt = card.addText(summaries[i].text || "");
+    const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
+    // ✅ SEM lineLimit - deixa wrap natural dentro da largura definida
   }
 }
 

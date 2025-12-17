@@ -234,36 +234,36 @@ function renderTypeCard(w, group, ui) {
   // LEFT: timeline compacta (2 linhas)
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
-  for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) left.addSpacer(3); // mais compacto
-  
+    for (let i = 0; i < blocks.length; i++) {
+    if (i > 0) left.addSpacer(3);
+
     const row = left.addStack();
     row.centerAlignContent();
-  
+
     const dot = row.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
     dot.textColor = levelColor(blocks[i].level);
-  
+
     row.addSpacer(5);
-  
+
     const start = row.addText(blocks[i].startLabel);
     start.font = Font.systemFont(ui.timelineFont);
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
-  
-    // só cria a segunda linha se existir "até"
+
     if (blocks[i].endLabel) {
       left.addSpacer(1);
-  
+
       const endRow = left.addStack();
       endRow.addSpacer(ui.indent);
-  
+
       const end = endRow.addText(blocks[i].endLabel);
       end.font = Font.systemFont(ui.timelineFontSmall);
       end.textColor = new Color("#7E8AA6");
       end.lineLimit = 1;
     }
-  }
+  }            // fecha o for
+}              // ✅ fecha renderTypeCard
 
 /* ================= DATA ================= */
 

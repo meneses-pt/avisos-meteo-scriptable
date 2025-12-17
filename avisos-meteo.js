@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.18";
+const SCRIPT_VERSION = "v1.0.19";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -386,6 +386,7 @@ function renderTypeCard(w, group, ui) {
       txt.lineLimit = 1; // cada linha é independente
     }
   }
+}
 
 /* ================= DATA ================= */
 

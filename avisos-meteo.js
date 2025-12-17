@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.22";
+const SCRIPT_VERSION = "v1.0.23";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -151,7 +151,7 @@ function uiForFamily(fam) {
       timelineFontSmall: 11,   // ✅ MANTÉM ORIGINAL
       maxTimelineBlocks: 14,
       indent: 22,
-      timelineSpacing: 3,      // ✅ era 4
+      timelineSpacing: 2,      // ✅ era 4
       timelineEndSpacing: 1,   // ✅ era 2
     };
   }
@@ -176,8 +176,8 @@ function uiForFamily(fam) {
       timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
       maxTimelineBlocks: 8,
       indent: 18,
-      timelineSpacing: 2,      // ✅ era 4
-      timelineEndSpacing: 1,   // ✅ era 2
+      timelineSpacing: 1,      // ✅ era 4
+      timelineEndSpacing: 0,   // ✅ era 2
     };
   }
 
@@ -201,8 +201,8 @@ function uiForFamily(fam) {
     timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
     maxTimelineBlocks: 10,
     indent: 18,
-    timelineSpacing: 2,      // ✅ era 4
-    timelineEndSpacing: 1,   // ✅ era 2
+    timelineSpacing: 1,      // ✅ era 4
+    timelineEndSpacing: 0,   // ✅ era 2
   };
 }
 
@@ -256,19 +256,19 @@ function estimateTextWidth(text, fontSize) {
     
     // Caracteres largos (maiúsculas, números, alguns símbolos)
     if (/[A-Z0-9MWÕÃ]/.test(char)) {
-      totalWidth += fontSize * 0.65;
+      totalWidth += fontSize * 0.68; // era 0.65
     }
     // Caracteres estreitos (i, l, pontuação)
     else if (/[il\.,:;!']/.test(char)) {
-      totalWidth += fontSize * 0.30;
+      totalWidth += fontSize * 0.32; // era 0.30
     }
     // Espaços
     else if (char === ' ') {
-      totalWidth += fontSize * 0.35;
+      totalWidth += fontSize * 0.37; // era 0.35
     }
     // Caracteres normais (minúsculas, acentos)
     else {
-      totalWidth += fontSize * 0.52;
+      totalWidth += fontSize * 0.54; // era 0.52
     }
   }
   

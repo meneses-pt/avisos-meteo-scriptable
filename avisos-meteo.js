@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.20";
+const SCRIPT_VERSION = "v1.0.21";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -130,6 +130,8 @@ async function main() {
 
 /* ================= UI ================= */
 
+
+Copy
 function uiForFamily(fam) {
   if (fam === "large") {
     return {
@@ -147,10 +149,12 @@ function uiForFamily(fam) {
       colGap: 14,
       levelFont: 11,
       descFont: 12,
-      timelineFont: 13,
-      timelineFontSmall: 11,
+      timelineFont: 13,        // ✅ MANTÉM ORIGINAL
+      timelineFontSmall: 11,   // ✅ MANTÉM ORIGINAL
       maxTimelineBlocks: 14,
       indent: 22,
+      timelineSpacing: 3,      // ✅ era 4
+      timelineEndSpacing: 1,   // ✅ era 2
     };
   }
 
@@ -170,10 +174,12 @@ function uiForFamily(fam) {
       colGap: 8,
       levelFont: 10,
       descFont: 11,
-      timelineFont: 12,
-      timelineFontSmall: 10,
+      timelineFont: 12,        // ✅ MANTÉM ORIGINAL
+      timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
       maxTimelineBlocks: 8,
       indent: 18,
+      timelineSpacing: 2,      // ✅ era 4
+      timelineEndSpacing: 1,   // ✅ era 2
     };
   }
 
@@ -193,10 +199,12 @@ function uiForFamily(fam) {
     colGap: 10,
     levelFont: 10,
     descFont: 12,
-    timelineFont: 12,
-    timelineFontSmall: 10,
+    timelineFont: 12,        // ✅ MANTÉM ORIGINAL
+    timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
     maxTimelineBlocks: 10,
     indent: 18,
+    timelineSpacing: 2,      // ✅ era 4
+    timelineEndSpacing: 1,   // ✅ era 2
   };
 }
 
@@ -345,10 +353,12 @@ function renderTypeCard(w, group, ui) {
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
   for (let i = 0; i < blocks.length; i++) {
-    if (i > 0) left.addSpacer(4);
+    if (i > 0) left.addSpacer(ui.timelineSpacing);
 
     const row = left.addStack();
     row.centerAlignContent();
+
+    const isActive = isActiveBlock(blocks[i]); // ✅ Verifica se está ativo AGORA
 
     const dot = row.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
@@ -357,12 +367,14 @@ function renderTypeCard(w, group, ui) {
     row.addSpacer(6);
 
     const start = row.addText(blocks[i].startLabel);
-    start.font = Font.systemFont(ui.timelineFont);
+    start.font = isActive 
+      ? Font.boldSystemFont(ui.timelineFont)  // ✅ NEGRITO se ativo
+      : Font.systemFont(ui.timelineFont);
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
 
     if (blocks[i].endLabel) {
-      left.addSpacer(2);
+      left.addSpacer(ui.timelineEndSpacing);
 
       const endRow = left.addStack();
       endRow.addSpacer(ui.indent);
@@ -398,12 +410,12 @@ function renderTypeCard(w, group, ui) {
     const lines = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont);
     
     for (let j = 0; j < lines.length; j++) {
-      if (j > 0) right.addSpacer(2); // espaço entre linhas
+      if (j > 0) right.addSpacer(2);
       
       const txt = right.addText(lines[j]);
       txt.font = Font.systemFont(ui.descFont);
       txt.textColor = new Color("#D5DBE7");
-      txt.lineLimit = 1; // cada linha é independente
+      txt.lineLimit = 1;
     }
   }
 }
@@ -440,6 +452,22 @@ function buildLevelSummaries(items) {
   return Object.values(map);
 }
 
+function isActiveBlock(block) {
+  const now = Date.now();
+  const start = safeMs(block.startISO);
+  const end = safeMs(block.endISO);
+  
+  if (start === null) return false;
+  
+  // Se já começou
+  if (now >= start) {
+    // Se não tem fim OU ainda não acabou
+    return end === null || now <= end;
+  }
+  
+  return false;
+}
+
 function buildTimelineBlocks(items) {
   const sorted = [...items].sort((a, b) => String(a.start || "").localeCompare(String(b.start || "")));
 
@@ -452,11 +480,12 @@ function buildTimelineBlocks(items) {
     return {
       level: cur.level,
       startLabel: fmtStart(cur.start),
-      endLabel: showEnd ? ("até " + fmtEnd(cur.end)) : null
+      endLabel: showEnd ? ("até " + fmtEnd(cur.end)) : null,
+      startISO: cur.start,  // ✅ Guarda o ISO original para comparar
+      endISO: cur.end       // ✅ Guarda o ISO original para comparar
     };
   });
 }
-
 function safeMs(iso) {
   try {
     const ms = new Date(iso).getTime();

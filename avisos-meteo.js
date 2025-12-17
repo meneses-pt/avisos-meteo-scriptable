@@ -197,19 +197,6 @@ function renderTypeCard(w, group, ui) {
   card.addSpacer(8);
 
   // 2 colunas
-  const content = card.addStack();
-  content.topAlignContent();
-  content.size = new Size(0, 0); // importantíssimo para “esticar”
-
-  const left = content.addStack();
-  left.layoutVertically();
-
-  content.addSpacer(10);
-
-  const right = content.addStack();
-  right.layoutVertically();
-  right.size = new Size(ui.rightColWidth, 0);
-
   // *** ISTO FORÇA MESMO O CARD A OCUPAR A LARGURA TODA ***
   const content = card.addStack();
   content.topAlignContent();

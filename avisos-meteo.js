@@ -109,7 +109,6 @@ function uiForFamily(fam) {
       subtitleText: "Porto · próximos avisos",
       afterHeaderSpace: 14,
       cardTitleFont: 13,
-      rightColWidth: 200,
       levelFont: 11,
       descFont: 12,
       timelineFont: 13,
@@ -133,7 +132,6 @@ function uiForFamily(fam) {
       subtitleText: "",
       afterHeaderSpace: 10,
       cardTitleFont: 12,
-      rightColWidth: 150,
       levelFont: 10,
       descFont: 11,
       timelineFont: 12,
@@ -157,7 +155,6 @@ function uiForFamily(fam) {
     subtitleText: "Porto · avisos",
     afterHeaderSpace: 12,
     cardTitleFont: 12,
-    rightColWidth: 180,
     levelFont: 10,
     descFont: 12,
     timelineFont: 12,
@@ -175,7 +172,6 @@ function uiForFamily(fam) {
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
   card.layoutVertically();
-  card.size = new Size(0, 0); // tenta ocupar a largura disponível
   card.setPadding(12, 12, 12, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
@@ -196,20 +192,21 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(8);
 
-  // 2 colunas
-  // *** ISTO FORÇA MESMO O CARD A OCUPAR A LARGURA TODA ***
+  // ✅ LAYOUT HORIZONTAL CORRIGIDO
   const content = card.addStack();
+  content.layoutHorizontally();
   content.topAlignContent();
-  content.size = new Size(0, 0);
   
+  // Coluna esquerda: timeline
   const left = content.addStack();
   left.layoutVertically();
   
-  content.addSpacer(10);
+  // Spacer flexível ENTRE as colunas
+  content.addSpacer();
   
+  // Coluna direita: legendas (último elemento → ocupa espaço restante)
   const right = content.addStack();
   right.layoutVertically();
-  right.size = new Size(ui.rightColWidth, 0);
 
   // RIGHT: legendas ordenadas (Amarelo → Laranja → Vermelho)
   const summaries = buildLevelSummaries(group.items)
@@ -228,13 +225,13 @@ function renderTypeCard(w, group, ui) {
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    txt.lineLimit = 0; // *** WRAP REAL ***
+    txt.lineLimit = 0; // ✅ wrap ativado
   }
 
   // LEFT: timeline compacta (2 linhas)
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
-    for (let i = 0; i < blocks.length; i++) {
+  for (let i = 0; i < blocks.length; i++) {
     if (i > 0) left.addSpacer(3);
 
     const row = left.addStack();
@@ -262,8 +259,8 @@ function renderTypeCard(w, group, ui) {
       end.textColor = new Color("#7E8AA6");
       end.lineLimit = 1;
     }
-  }            // fecha o for
-}              // ✅ fecha renderTypeCard
+  }
+}
 
 /* ================= DATA ================= */
 
@@ -390,3 +387,5 @@ function finish(w) {
   Script.setWidget(w);
   Script.complete();
 }
+
+await main();

@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.8";
+const SCRIPT_VERSION = "v1.0.9";
 
 async function main() {
   const AREA = "PTO";
@@ -249,15 +249,15 @@ function renderTypeCard(w, group, ui) {
 
   card.addSpacer(10);
 
-  // LAYOUT HORIZONTAL (2 colunas)
+  // LAYOUT HORIZONTAL (2 colunas) - SEM definir size
   const content = card.addStack();
   content.topAlignContent();
   content.layoutHorizontally();
   
-  // ===== COLUNA ESQUERDA: Timeline (largura fixa) =====
+  // ===== COLUNA ESQUERDA: Timeline =====
   const left = content.addStack();
   left.layoutVertically();
-  left.size = new Size(ui.leftColWidth, 0);
+  // ✅ REMOVIDO: left.size = new Size(ui.leftColWidth, 0);
 
   const blocks = buildTimelineBlocks(group.items).slice(0, ui.maxTimelineBlocks);
 
@@ -291,13 +291,13 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // Espaço entre colunas
+  // ✅ Spacer fixo para simular largura da coluna esquerda
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas (SEM largura fixa) =====
+  // ===== COLUNA DIREITA: Legendas =====
   const right = content.addStack();
   right.layoutVertically();
-  // ✅ NÃO definir .size - deixa o Scriptable calcular automaticamente
+  // ✅ SEM definir .size
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -311,11 +311,11 @@ function renderTypeCard(w, group, ui) {
 
     right.addSpacer(4);
 
-    // ✅ TEXTO COMPLETO - vai fazer wrap automático
+    // ✅ TEXTO COMPLETO - deve fazer wrap agora
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");
-    // NÃO definir lineLimit - deixa wrap natural
+    // NÃO definir lineLimit
   }
 }
 

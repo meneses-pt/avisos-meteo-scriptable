@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.7";
+const SCRIPT_VERSION = "v1.0.8";
 
 async function main() {
   const AREA = "PTO";
@@ -254,7 +254,7 @@ function renderTypeCard(w, group, ui) {
   content.topAlignContent();
   content.layoutHorizontally();
   
-  // ===== COLUNA ESQUERDA: Timeline =====
+  // ===== COLUNA ESQUERDA: Timeline (largura fixa) =====
   const left = content.addStack();
   left.layoutVertically();
   left.size = new Size(ui.leftColWidth, 0);
@@ -291,13 +291,13 @@ function renderTypeCard(w, group, ui) {
     }
   }
 
-  // Espaço fixo entre colunas
+  // Espaço entre colunas
   content.addSpacer(ui.colGap);
 
-  // ===== COLUNA DIREITA: Legendas (OCUPA O RESTO) =====
+  // ===== COLUNA DIREITA: Legendas (SEM largura fixa) =====
   const right = content.addStack();
   right.layoutVertically();
-  // ✅ NÃO definir size - deixa ocupar o espaço restante
+  // ✅ NÃO definir .size - deixa o Scriptable calcular automaticamente
 
   const summaries = buildLevelSummaries(group.items)
     .sort((a, b) => priorityAsc(a.level) - priorityAsc(b.level));
@@ -311,7 +311,7 @@ function renderTypeCard(w, group, ui) {
 
     right.addSpacer(4);
 
-    // ✅ TEXTO COMPLETO sem quebra manual
+    // ✅ TEXTO COMPLETO - vai fazer wrap automático
     const txt = right.addText(summaries[i].text || "");
     txt.font = Font.systemFont(ui.descFont);
     txt.textColor = new Color("#D5DBE7");

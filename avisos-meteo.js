@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.24";
+const SCRIPT_VERSION = "v1.0.25";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -21,6 +21,9 @@ async function main() {
   if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir, true);
 
   const w = new ListWidget();
+  
+  // ✅ FORÇA ALINHAMENTO AO TOPO
+  w.topAlignContent = true;
   
   // Margens assimétricas (mais lateral no large)
   if (fam === "large") {
@@ -99,6 +102,7 @@ async function main() {
   }
 
   const groups = groupByType(warnings);
+  
   // ✅ Ordena pela data do primeiro evento de cada tipo
   groups.sort((a, b) => {
     const aFirst = a.items.reduce((earliest, item) => {
@@ -122,9 +126,17 @@ async function main() {
     return 0;
   });
   
+  // ✅ Primeiras 2 categorias: card completo, restantes: card compacto
   for (let i = 0; i < groups.length; i++) {
     if (i > 0) w.addSpacer(10);
-    renderTypeCard(w, groups[i], ui);
+    
+    if (i < 2) {
+      renderTypeCard(w, groups[i], ui);
+    } else {
+      // A partir da 3ª categoria, mostra card compacto
+      renderCompactCards(w, groups.slice(2), ui);
+      break; // Não continua o loop
+    }
   }
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
@@ -167,12 +179,12 @@ function uiForFamily(fam) {
       colGap: 14,
       levelFont: 11,
       descFont: 12,
-      timelineFont: 13,        // ✅ MANTÉM ORIGINAL
-      timelineFontSmall: 11,   // ✅ MANTÉM ORIGINAL
+      timelineFont: 13,
+      timelineFontSmall: 11,
       maxTimelineBlocks: 14,
       indent: 22,
-      timelineSpacing: 2,      // ✅ era 4
-      timelineEndSpacing: 1,   // ✅ era 2
+      timelineSpacing: 2,
+      timelineEndSpacing: 1,
     };
   }
 
@@ -192,12 +204,12 @@ function uiForFamily(fam) {
       colGap: 8,
       levelFont: 10,
       descFont: 11,
-      timelineFont: 12,        // ✅ MANTÉM ORIGINAL
-      timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
+      timelineFont: 12,
+      timelineFontSmall: 10,
       maxTimelineBlocks: 8,
       indent: 18,
-      timelineSpacing: 1,      // ✅ era 4
-      timelineEndSpacing: 0,   // ✅ era 2
+      timelineSpacing: 1,
+      timelineEndSpacing: 0,
     };
   }
 
@@ -217,42 +229,56 @@ function uiForFamily(fam) {
     colGap: 10,
     levelFont: 10,
     descFont: 12,
-    timelineFont: 12,        // ✅ MANTÉM ORIGINAL
-    timelineFontSmall: 10,   // ✅ MANTÉM ORIGINAL
+    timelineFont: 12,
+    timelineFontSmall: 10,
     maxTimelineBlocks: 10,
     indent: 18,
-    timelineSpacing: 1,      // ✅ era 4
-    timelineEndSpacing: 0,   // ✅ era 2
+    timelineSpacing: 1,
+    timelineEndSpacing: 0,
   };
 }
 
 /* ================= TEXT WRAP ================= */
 
-function wrapText(text, maxChars) {
+function estimateTextWidth(text, fontSize) {
+  let totalWidth = 0;
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    
+    // Caracteres largos (maiúsculas, números, alguns símbolos)
+    if (/[A-Z0-9MWÕÃ]/.test(char)) {
+      totalWidth += fontSize * 0.68;
+    }
+    // Caracteres estreitos (i, l, pontuação)
+    else if (/[il\.,:;!']/.test(char)) {
+      totalWidth += fontSize * 0.32;
+    }
+    // Espaços
+    else if (char === ' ') {
+      totalWidth += fontSize * 0.37;
+    }
+    // Caracteres normais (minúsculas, acentos)
+    else {
+      totalWidth += fontSize * 0.54;
+    }
+  }
+  
+  return totalWidth;
+}
+
+function wrapTextToWidth(text, maxWidth, fontSize) {
   if (!text) return [""];
-  if (text.length <= maxChars) return [text];
   
   const words = text.split(' ');
   const lines = [];
   let currentLine = '';
   
   for (const word of words) {
-    // Se a palavra sozinha é maior que maxChars, força quebra
-    if (word.length > maxChars) {
-      if (currentLine) {
-        lines.push(currentLine);
-        currentLine = '';
-      }
-      // Quebra a palavra em pedaços
-      for (let i = 0; i < word.length; i += maxChars) {
-        lines.push(word.substring(i, i + maxChars));
-      }
-      continue;
-    }
-    
     const testLine = currentLine ? currentLine + ' ' + word : word;
+    const estimatedWidth = estimateTextWidth(testLine, fontSize);
     
-    if (testLine.length > maxChars && currentLine) {
+    if (estimatedWidth > maxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = word;
     } else {
@@ -266,72 +292,6 @@ function wrapText(text, maxChars) {
 }
 
 /* ================= RENDER ================= */
-
-// ===== FUNÇÃO PARA CALCULAR LARGURA APROXIMADA DO TEXTO =====
-function estimateTextWidth(text, fontSize) {
-  let totalWidth = 0;
-  
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    
-    // Caracteres largos (maiúsculas, números, alguns símbolos)
-    if (/[A-Z0-9MWÕÃ]/.test(char)) {
-      totalWidth += fontSize * 0.68; // era 0.65
-    }
-    // Caracteres estreitos (i, l, pontuação)
-    else if (/[il\.,:;!']/.test(char)) {
-      totalWidth += fontSize * 0.32; // era 0.30
-    }
-    // Espaços
-    else if (char === ' ') {
-      totalWidth += fontSize * 0.37; // era 0.35
-    }
-    // Caracteres normais (minúsculas, acentos)
-    else {
-      totalWidth += fontSize * 0.54; // era 0.52
-    }
-  }
-  
-  return totalWidth;
-}
-
-function wrapTextToWidth(text, maxWidth, fontSize) {
-  if (!text) return [""];
-  
-  console.log("=== WRAP DEBUG ===");
-  console.log("Texto: " + text);
-  console.log("maxWidth: " + maxWidth);
-  console.log("fontSize: " + fontSize);
-  
-  const words = text.split(' ');
-  const lines = [];
-  let currentLine = '';
-  
-  for (const word of words) {
-    const testLine = currentLine ? currentLine + ' ' + word : word;
-    const estimatedWidth = estimateTextWidth(testLine, fontSize);
-    
-    console.log("Testando: '" + testLine + "' → width: " + estimatedWidth.toFixed(1));
-    
-    if (estimatedWidth > maxWidth && currentLine) {
-      console.log("QUEBRA! Linha completa: '" + currentLine + "'");
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  }
-  
-  if (currentLine) {
-    console.log("Última linha: '" + currentLine + "'");
-    lines.push(currentLine);
-  }
-  
-  console.log("Total de linhas: " + lines.length);
-  console.log("Resultado: " + JSON.stringify(lines));
-  
-  return lines.length > 0 ? lines : [""];
-}
 
 function renderTypeCard(w, group, ui) {
   const card = w.addStack();
@@ -354,6 +314,7 @@ function renderTypeCard(w, group, ui) {
   name.font = Font.boldSystemFont(ui.cardTitleFont);
   name.textColor = Color.white();
   name.lineLimit = 1;
+  // ✅ REMOVIDO minimumScaleFactor
 
   card.addSpacer(10);
 
@@ -375,7 +336,7 @@ function renderTypeCard(w, group, ui) {
     const row = left.addStack();
     row.centerAlignContent();
 
-    const isActive = isActiveBlock(blocks[i]); // ✅ Verifica se está ativo AGORA
+    const isActive = isActiveBlock(blocks[i]);
 
     const dot = row.addText("●");
     dot.font = Font.boldSystemFont(ui.timelineFont + 2);
@@ -385,7 +346,7 @@ function renderTypeCard(w, group, ui) {
 
     const start = row.addText(blocks[i].startLabel);
     start.font = isActive 
-      ? Font.boldSystemFont(ui.timelineFont)  // ✅ NEGRITO se ativo
+      ? Font.boldSystemFont(ui.timelineFont)
       : Font.systemFont(ui.timelineFont);
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
@@ -422,18 +383,59 @@ function renderTypeCard(w, group, ui) {
   
     right.addSpacer(4);
   
-    // ✅ CALCULAR WRAP E CRIAR UM addText() POR LINHA
+    // ✅ LIMITAR A 2 LINHAS COM ELLIPSIS
     const fullText = summaries[i].text || "";
     const lines = wrapTextToWidth(fullText, ui.rightColWidth, ui.descFont);
     
-    for (let j = 0; j < lines.length; j++) {
+    const maxLines = 2;
+    const displayLines = lines.slice(0, maxLines);
+    const hasMore = lines.length > maxLines;
+    
+    for (let j = 0; j < displayLines.length; j++) {
       if (j > 0) right.addSpacer(2);
       
-      const txt = right.addText(lines[j]);
+      const isLastLine = j === displayLines.length - 1;
+      const lineText = (isLastLine && hasMore) ? displayLines[j] + "…" : displayLines[j];
+      
+      const txt = right.addText(lineText);
       txt.font = Font.systemFont(ui.descFont);
       txt.textColor = new Color("#D5DBE7");
       txt.lineLimit = 1;
     }
+  }
+}
+
+// ✅ NOVA FUNÇÃO: Card compacto com pills
+function renderCompactCards(w, groups, ui) {
+  const card = w.addStack();
+  card.layoutVertically();
+  card.setPadding(12, 12, 12, 12);
+  card.cornerRadius = 16;
+  card.backgroundColor = new Color("#111B2E");
+  
+  const pillsContainer = card.addStack();
+  pillsContainer.layoutHorizontally();
+  pillsContainer.centerAlignContent();
+  
+  for (let i = 0; i < groups.length; i++) {
+    if (i > 0) pillsContainer.addSpacer(8);
+    
+    const pill = pillsContainer.addStack();
+    pill.setPadding(6, 12, 6, 12);
+    pill.cornerRadius = 12;
+    pill.backgroundColor = new Color("#1A243A");
+    pill.borderWidth = 1;
+    pill.borderColor = levelColor(groups[i].maxLevel);
+    
+    const emoji = pill.addText(iconForType(groups[i].type));
+    emoji.font = Font.systemFont(12);
+    
+    pill.addSpacer(4);
+    
+    const label = pill.addText(groups[i].type);
+    label.font = Font.mediumSystemFont(11);
+    label.textColor = new Color("#D5DBE7");
+    label.lineLimit = 1;
   }
 }
 
@@ -476,9 +478,7 @@ function isActiveBlock(block) {
   
   if (start === null) return false;
   
-  // Se já começou
   if (now >= start) {
-    // Se não tem fim OU ainda não acabou
     return end === null || now <= end;
   }
   
@@ -498,11 +498,12 @@ function buildTimelineBlocks(items) {
       level: cur.level,
       startLabel: fmtStart(cur.start),
       endLabel: showEnd ? ("até " + fmtEnd(cur.end)) : null,
-      startISO: cur.start,  // ✅ Guarda o ISO original para comparar
-      endISO: cur.end       // ✅ Guarda o ISO original para comparar
+      startISO: cur.start,
+      endISO: cur.end
     };
   });
 }
+
 function safeMs(iso) {
   try {
     const ms = new Date(iso).getTime();
@@ -567,9 +568,10 @@ function iconForType(type) {
   if (t.includes("vento")) return "💨";
   if (t.includes("precip") || t.includes("chuva")) return "🌧️";
   if (t.includes("trovo")) return "⛈️";
+  if (t.includes("neve")) return "❄️";  // ✅ ADICIONADO
   if (t.includes("nevo")) return "🌫️";
   if (t.includes("frio")) return "🥶";
-  if (t.includes("calor")) return "🥵";
+  if (t.includes("calor") || t.includes("quente")) return "🥵";
   return "⚠️";
 }
 

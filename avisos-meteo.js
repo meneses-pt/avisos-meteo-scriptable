@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.25";
+const SCRIPT_VERSION = "v1.0.26";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -97,6 +97,22 @@ async function main() {
     const t = w.addText("Sem avisos relevantes.");
     t.font = Font.systemFont(ui.bodyFont);
     t.textColor = new Color("#D5DBE7");
+    
+    // ✅ NÃO adicionar spacer aqui - deixa o footer fixo no fundo
+    
+    const footer = w.addStack();
+    footer.bottomAlignContent();
+    
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+    
+    const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
+    info.font = Font.systemFont(8);
+    info.textColor = new Color("#3A4A5A");
+    info.opacity = 0.6;
+    
+    footer.addSpacer();
+    
     finish(w);
     return;
   }
@@ -140,9 +156,6 @@ async function main() {
   }
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
-  
-  // Empurrar footer para o fundo
-  w.addSpacer();
   
   const footer = w.addStack();
   footer.bottomAlignContent();

@@ -156,6 +156,9 @@ async function main() {
   }
 
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+
+  // Empurrar footer para o fundo
+  w.addSpacer();
   
   const footer = w.addStack();
   footer.bottomAlignContent();

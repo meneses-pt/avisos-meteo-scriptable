@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.26";
+const SCRIPT_VERSION = "v1.0.27";
 
 async function main() {
   // ✅ LOG DA VERSÃO

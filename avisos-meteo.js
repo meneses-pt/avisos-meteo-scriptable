@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.27";
+const SCRIPT_VERSION = "v1.0.29";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -21,9 +21,6 @@ async function main() {
   if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir, true);
 
   const w = new ListWidget();
-  
-  // ✅ FORÇA ALINHAMENTO AO TOPO
-  w.topAlignContent = true;
   
   // Margens assimétricas (mais lateral no large)
   if (fam === "large") {
@@ -98,20 +95,10 @@ async function main() {
     t.font = Font.systemFont(ui.bodyFont);
     t.textColor = new Color("#D5DBE7");
     
-    // ✅ NÃO adicionar spacer aqui - deixa o footer fixo no fundo
+    w.addSpacer();
+    addFooter(w);
     
-    const footer = w.addStack();
-    footer.bottomAlignContent();
-    
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-    
-    const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
-    info.font = Font.systemFont(8);
-    info.textColor = new Color("#3A4A5A");
-    info.opacity = 0.6;
-    
-    footer.addSpacer();
+    w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
     
     finish(w);
     return;
@@ -150,7 +137,10 @@ async function main() {
       renderTypeCard(w, groups[i], ui);
     } else {
       // A partir da 3ª categoria, mostra card compacto
-      renderCompactCards(w, groups.slice(2), ui);
+      const remaining = groups.slice(2);
+      if (remaining.length > 0) {
+        renderCompactCards(w, remaining, ui);
+      }
       break; // Não continua o loop
     }
   }
@@ -159,19 +149,7 @@ async function main() {
 
   // Empurrar footer para o fundo
   w.addSpacer();
-  
-  const footer = w.addStack();
-  footer.bottomAlignContent();
-  
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-  
-  const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
-  info.font = Font.systemFont(8);
-  info.textColor = new Color("#3A4A5A");
-  info.opacity = 0.6;
-  
-  footer.addSpacer();
+  addFooter(w);
   
   finish(w);
 }
@@ -330,7 +308,6 @@ function renderTypeCard(w, group, ui) {
   name.font = Font.boldSystemFont(ui.cardTitleFont);
   name.textColor = Color.white();
   name.lineLimit = 1;
-  // ✅ REMOVIDO minimumScaleFactor
 
   card.addSpacer(10);
 
@@ -453,6 +430,23 @@ function renderCompactCards(w, groups, ui) {
     label.textColor = new Color("#D5DBE7");
     label.lineLimit = 1;
   }
+}
+
+/* ================= FOOTER ================= */
+
+function addFooter(w) {
+  const footer = w.addStack();
+  footer.bottomAlignContent();
+  
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+  
+  const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
+  info.font = Font.systemFont(8);
+  info.textColor = new Color("#3A4A5A");
+  info.opacity = 0.6;
+  
+  footer.addSpacer();
 }
 
 /* ================= DATA ================= */
@@ -584,7 +578,7 @@ function iconForType(type) {
   if (t.includes("vento")) return "💨";
   if (t.includes("precip") || t.includes("chuva")) return "🌧️";
   if (t.includes("trovo")) return "⛈️";
-  if (t.includes("neve")) return "❄️";  // ✅ ADICIONADO
+  if (t.includes("neve")) return "❄️";
   if (t.includes("nevo")) return "🌫️";
   if (t.includes("frio")) return "🥶";
   if (t.includes("calor") || t.includes("quente")) return "🥵";

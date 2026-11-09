@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.32";
+const SCRIPT_VERSION = "v1.0.33";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -116,7 +116,7 @@ async function main() {
     return;
   }
 
-  const groups = groupByType(warnings);
+  const groups = mergeEquivalentGroups(groupByType(warnings));
   
   // ✅ Ordena pela data do primeiro evento de cada tipo
   groups.sort((a, b) => {
@@ -320,7 +320,7 @@ function renderTypeCard(w, group, ui) {
   const top = card.addStack();
   top.centerAlignContent();
 
-  const emoji = top.addText(iconForType(group.type));
+  const emoji = top.addText(group.icon || iconForType(group.type));
   emoji.font = Font.systemFont(ui.cardTitleFont + 2);
 
   top.addSpacer(6);
@@ -422,40 +422,69 @@ function renderTypeCard(w, group, ui) {
 }
 
 // ✅ NOVA FUNÇÃO: Card compacto com pills
+const COMPACT_MAX_BLOCKS = 2;
+
+// A partir do 3.º tipo: uma linha por tipo com nível e datas, sem texto descritivo
 function renderCompactCards(w, groups, ui) {
   const card = w.addStack();
   card.layoutVertically();
-  card.setPadding(12, 12, 12, 12);
+  card.setPadding(10, 12, 10, 12);
   card.cornerRadius = 16;
   card.backgroundColor = new Color("#111B2E");
-  
-  const pillsContainer = card.addStack();
-  pillsContainer.layoutHorizontally();
-  pillsContainer.centerAlignContent();
-  
-  for (let i = 0; i < groups.length; i++) {
-    if (i > 0) pillsContainer.addSpacer(8);
-    
-    const pill = pillsContainer.addStack();
-    pill.setPadding(6, 12, 6, 12);
-    pill.cornerRadius = 12;
-    pill.backgroundColor = new Color("#1A243A");
-    pill.borderWidth = 1;
-    pill.borderColor = levelColor(groups[i].maxLevel);
-    
-    const emoji = pill.addText(iconForType(groups[i].type));
-    emoji.font = Font.systemFont(12);
-    
-    pill.addSpacer(4);
-    
-    const label = pill.addText(groups[i].type);
-    label.font = Font.mediumSystemFont(11);
-    label.textColor = new Color("#D5DBE7");
-    label.lineLimit = 1;
+
+  for (let g = 0; g < groups.length; g++) {
+    if (g > 0) card.addSpacer(8);
+    const group = groups[g];
+
+    const head = card.addStack();
+    head.centerAlignContent();
+
+    const emoji = head.addText(group.icon || iconForType(group.type));
+    emoji.font = Font.systemFont(ui.timelineFont);
+
+    head.addSpacer(6);
+
+    const name = head.addText(group.type);
+    name.font = Font.boldSystemFont(ui.timelineFont);
+    name.textColor = Color.white();
+    name.lineLimit = 1;
+    name.minimumScaleFactor = 0.8;
+
+    const blocks = buildTimelineBlocks(group.items);
+    const shown = blocks.slice(0, COMPACT_MAX_BLOCKS);
+
+    for (const block of shown) {
+      card.addSpacer(3);
+
+      const row = card.addStack();
+      row.centerAlignContent();
+      row.addSpacer(ui.indent);
+
+      const dot = row.addText("●");
+      dot.font = Font.boldSystemFont(ui.timelineFontSmall);
+      dot.textColor = levelColor(block.level);
+
+      row.addSpacer(5);
+
+      const label = row.addText(block.startLabel + (block.endLabel ? " " + block.endLabel : ""));
+      label.font = isActiveBlock(block)
+        ? Font.boldSystemFont(ui.timelineFontSmall)
+        : Font.systemFont(ui.timelineFontSmall);
+      label.textColor = new Color("#A6B0C3");
+      label.lineLimit = 1;
+      label.minimumScaleFactor = 0.8;
+    }
+
+    if (blocks.length > shown.length) {
+      card.addSpacer(2);
+      const moreRow = card.addStack();
+      moreRow.addSpacer(ui.indent);
+      const more = moreRow.addText("+" + (blocks.length - shown.length) + " períodos");
+      more.font = Font.systemFont(ui.timelineFontSmall);
+      more.textColor = new Color("#7E8AA6");
+    }
   }
 }
-
-/* ================= FOOTER ================= */
 
 const STALE_AFTER_MS = 30 * 60 * 1000;
 
@@ -503,6 +532,60 @@ function groupByType(ws) {
     }
   }
   return Object.values(map);
+}
+
+// Junta tipos com exatamente os mesmos períodos e níveis num só cartão
+// (ex.: "Precipitação e Trovoada")
+function groupSignature(group) {
+  return group.items
+    .map(it => [it.level, safeMs(it.start), safeMs(it.end)].join("|"))
+    .sort()
+    .join(";");
+}
+
+function joinNames(names) {
+  if (names.length <= 1) return names[0] || "";
+  return names.slice(0, -1).join(", ") + " e " + names[names.length - 1];
+}
+
+function mergeEquivalentGroups(groups) {
+  const bySig = new Map();
+  for (const group of groups) {
+    const sig = groupSignature(group);
+    if (!bySig.has(sig)) bySig.set(sig, []);
+    bySig.get(sig).push(group);
+  }
+
+  const merged = [];
+  for (const same of bySig.values()) {
+    if (same.length === 1) {
+      merged.push(same[0]);
+      continue;
+    }
+
+    const base = same[0];
+    // Textos diferentes do mesmo nível ficam juntos no resumo
+    const items = base.items.map(it => {
+      const texts = [];
+      for (const g of same) {
+        for (const other of g.items) {
+          if (other.level === it.level && safeMs(other.start) === safeMs(it.start)
+              && other.text && !texts.includes(other.text)) {
+            texts.push(other.text);
+          }
+        }
+      }
+      return { ...it, text: texts.join(" ") };
+    });
+
+    merged.push({
+      type: joinNames(same.map(g => g.type)),
+      icon: [...new Set(same.map(g => iconForType(g.type)))].join(""),
+      items,
+      maxLevel: base.maxLevel
+    });
+  }
+  return merged;
 }
 
 function buildLevelSummaries(items) {

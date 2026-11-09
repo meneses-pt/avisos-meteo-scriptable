@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.29";
+const SCRIPT_VERSION = "v1.0.30";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -67,12 +67,18 @@ async function main() {
     try { cached = JSON.parse(fm.readString(cachePath)); } catch {}
   }
 
+  // No widget, se a cache tem menos de 5 min, nem vai à rede
+  const cacheAgeMs = cached?.savedAt ? Date.now() - new Date(cached.savedAt).getTime() : Infinity;
+  const skipFetch = config.runsInWidget && cacheAgeMs < 5 * 60 * 1000;
+
   let data = null;
   try {
+    if (skipFetch) throw new Error("cache fresca");
     const req = new Request(ENDPOINT);
-    req.timeoutInterval = 5;
+    req.timeoutInterval = 4;
     req.headers = { Accept: "application/json" };
-    data = await req.loadJSON();
+    // O timeoutInterval nem sempre é respeitado no widget: corta à força aos 4s
+    data = await withTimeout(req.loadJSON(), 4000);
     if (Array.isArray(data?.warnings)) {
       fm.writeString(cachePath, JSON.stringify({
         savedAt: new Date().toISOString(),
@@ -152,6 +158,15 @@ async function main() {
   addFooter(w);
   
   finish(w);
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      Timer.schedule(ms, false, () => reject(new Error("timeout")));
+    })
+  ]);
 }
 
 /* ================= UI ================= */
@@ -343,6 +358,7 @@ function renderTypeCard(w, group, ui) {
       : Font.systemFont(ui.timelineFont);
     start.textColor = new Color("#A6B0C3");
     start.lineLimit = 1;
+    start.minimumScaleFactor = 0.8;
 
     if (blocks[i].endLabel) {
       left.addSpacer(ui.timelineEndSpacing);
@@ -354,6 +370,7 @@ function renderTypeCard(w, group, ui) {
       end.font = Font.systemFont(ui.timelineFontSmall);
       end.textColor = new Color("#7E8AA6");
       end.lineLimit = 1;
+      end.minimumScaleFactor = 0.8;
     }
   }
 
@@ -507,7 +524,7 @@ function buildTimelineBlocks(items) {
     return {
       level: cur.level,
       startLabel: fmtStart(cur.start),
-      endLabel: showEnd ? ("até " + fmtEnd(cur.end)) : null,
+      endLabel: showEnd ? ("até " + fmtEnd(cur.end, cur.start)) : null,
       startISO: cur.start,
       endISO: cur.end
     };
@@ -525,23 +542,35 @@ function safeMs(iso) {
 
 /* ================= FORMATTING ================= */
 
-function fmtStart(iso) {
-  try {
-    const d = new Date(iso);
-    const wd = d.toLocaleDateString("pt-PT", { weekday: "short" });
-    const hm = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-    return wd + " " + hm;
-  } catch {
-    return "";
-  }
+const WEEKDAYS_PT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
 }
 
-function fmtEnd(iso) {
-  try {
-    return new Date(iso).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
+function fmtHM(d) {
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function fmtStart(iso) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  return WEEKDAYS_PT[d.getDay()] + " " + fmtHM(d);
+}
+
+// Mostra o dia só quando o fim cai num dia diferente do início
+function fmtEnd(iso, startISO) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  const s = startISO ? new Date(startISO) : null;
+  if (s && Number.isFinite(s.getTime()) && sameDay(s, d)) return fmtHM(d);
+  return WEEKDAYS_PT[d.getDay()] + " " + fmtHM(d);
 }
 
 /* ================= LEVELS ================= */

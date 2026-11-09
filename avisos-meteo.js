@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.31";
+const SCRIPT_VERSION = "v1.0.32";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -94,6 +94,12 @@ async function main() {
 
   const warnings = payload.warnings;
 
+  // Hora dos dados: agora se vieram da rede, senão a hora em que a cache foi gravada
+  const dataTime =
+    Array.isArray(data?.warnings) ? new Date() :
+    cached?.savedAt ? new Date(cached.savedAt) :
+    null;
+
   setTopPill(pill, pillText, warnings.length, getMaxLevel(warnings));
 
   if (!warnings.length) {
@@ -102,7 +108,7 @@ async function main() {
     t.textColor = new Color("#D5DBE7");
     
     w.addSpacer();
-    addFooter(w);
+    addFooter(w, dataTime);
     
     w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
     
@@ -155,7 +161,7 @@ async function main() {
 
   // Empurrar footer para o fundo
   w.addSpacer();
-  addFooter(w);
+  addFooter(w, dataTime);
   
   finish(w);
 }
@@ -451,18 +457,27 @@ function renderCompactCards(w, groups, ui) {
 
 /* ================= FOOTER ================= */
 
-function addFooter(w) {
+const STALE_AFTER_MS = 30 * 60 * 1000;
+
+function addFooter(w, dataTime) {
   const footer = w.addStack();
   footer.bottomAlignContent();
-  
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-  
-  const info = footer.addText(SCRIPT_VERSION + " · " + timeStr);
+
+  const valid = dataTime && Number.isFinite(dataTime.getTime());
+  const stale = !valid || (Date.now() - dataTime.getTime()) > STALE_AFTER_MS;
+  const timeStr = valid
+    ? dataTime.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+    : "sem dados";
+
+  const info = footer.addText(SCRIPT_VERSION + " · dados " + timeStr);
   info.font = Font.systemFont(8);
-  info.textColor = new Color("#3A4A5A");
-  info.opacity = 0.6;
-  
+  if (stale) {
+    info.textColor = new Color("#FFB86B");
+  } else {
+    info.textColor = new Color("#3A4A5A");
+    info.opacity = 0.6;
+  }
+
   footer.addSpacer();
 }
 
@@ -605,7 +620,7 @@ function levelColor(l) {
 function setTopPill(pill, text, count, maxLevel) {
   pill.backgroundColor = new Color("#1A243A");
   text.textColor = levelColor(maxLevel);
-  text.text = count + " avisos";
+  text.text = count + (count === 1 ? " aviso" : " avisos");
 }
 
 function iconForType(type) {

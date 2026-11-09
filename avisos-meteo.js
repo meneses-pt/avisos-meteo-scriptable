@@ -1,7 +1,7 @@
 // avisos-meteo.js (REMOTO) — Scriptable
 // Fixes: wrap real + margens ajustadas + footer no fundo
 
-const SCRIPT_VERSION = "v1.0.30";
+const SCRIPT_VERSION = "v1.0.31";
 
 async function main() {
   // ✅ LOG DA VERSÃO
@@ -523,12 +523,19 @@ function buildTimelineBlocks(items) {
 
     return {
       level: cur.level,
-      startLabel: fmtStart(cur.start),
+      startLabel: isNowWithin(cur.start, cur.end) ? "agora" : fmtStart(cur.start),
       endLabel: showEnd ? ("até " + fmtEnd(cur.end, cur.start)) : null,
       startISO: cur.start,
       endISO: cur.end
     };
   });
+}
+
+function isNowWithin(startISO, endISO) {
+  const start = safeMs(startISO);
+  const end = safeMs(endISO);
+  const now = Date.now();
+  return start !== null && now >= start && (end === null || now <= end);
 }
 
 function safeMs(iso) {
